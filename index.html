@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Лаки Стар — Медицинская карта</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#f8fafc;font-family:'Inter',system-ui,sans-serif;}
+  ::-webkit-scrollbar{width:4px;height:4px;}
+  ::-webkit-scrollbar-thumb{background:#c4b5fd;border-radius:4px;}
+  textarea,input{font-family:inherit;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useCallback,useRef}=React;
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
+function autoStatus(value,refMin,refMax){
+  const v=parseFloat(value),mn=parseFloat(refMin),mx=parseFloat(refMax);
+  if(isNaN(v)||isNaN(mn)||isNaN(mx))return"ok";
+  if(v<mn)return"low";
+  if(v>mx)return((v-mn)/(mx-mn))>1.15?"high":"warn";
+  return"ok";
+}
+function parseDate(s){
+  if(!s||s==="—")return 0;
+  const parts=s.split(/[.\-\/]/);
+  if(parts.length===3){
+    const[a,b,c]=parts;
+    if(c&&c.length===4)return new Date(`${c}-${b.padStart(2,"0")}-${a.padStart(2,"0")}`).getTime();
+    if(a&&a.length===4)return new Date(`${a}-${b.padStart(2,"0")}-${c.padStart(2,"0")}`).getTime();
+  }
+  if(/^\d{2}\.\d{4}$/.test(s)){const[m,y]=s.split(".");return new Date(`${y}-${m}-01`).getTime();}
+  if(/^\d{4}$/.test(s))return new Date(`${s}-01-01`).getTime();
+  return 0;
+}
+
+// ── localStorage storage (works anywhere) ─────────────────────────────────────
+const storage={
+  get(key){try{const v=localStorage.getItem(key);return v?{value:v}:null;}catch{return null;}},
+  set(key,value){try{localStorage.setItem(key,value);return true;}catch{return false;}},
+};
+
+const SC={
+  ok:  {label:"Норма",        color:"#16a34a",bg:"#f0fdf4",dot:"#16a34a"},
+  warn:{label:"↑ Погранично", color:"#d97706",bg:"#fffbeb",dot:"#d97706"},
+  high:{label:"↑ Выше нормы", color:"#dc2626",bg:"#fef2f2",dot:"#dc2626"},
+  low: {label:"↓ Ниже нормы", color:"#2563eb",bg:"#eff6ff",dot:"#2563eb"},
+};
+const ACCENT="#7c3aed";
+const TABS=[
+  {id:"overview",  label:"Профиль",    icon:"🐾"},
+  {id:"diagnoses", label:"Диагнозы",   icon:"📋"},
+  {id:"exams",     label:"Анализы",    icon:"🔬"},
+  {id:"visits",    label:"Визиты",     icon:"🏥"},
+  {id:"vaccinations",label:"Обработки",icon:"💉"},
+  {id:"prescriptions",label:"Назначения",icon:"💊"},
+];
+
+const DEF={
+  dogInfo:{name:"Лаки Стар",breed:"Йоркширский терьер",age:"11",dob:"07.02.2015",
+    owner:"Гармашова Р.С.",clinic:"Вет. клиника Виктория, пр. Мира 35, тел. 23-36-53",
+    microchip:"DKU 1166",color:"CT-T"},
+  diagnoses:[
+    {id:"d1",date:"09.2025",title:"Хронический гепатоз / гепатит",note:"Подтверждён УЗИ 24.09.2025. АЛТ и АСТ растут в динамике."},
+    {id:"d2",date:"09.2025",title:"Дисхолия, сладж желчного пузыря",note:"УЗИ: осадочная зона 0,35 см, стенка уплотнена (0,15 см), протоки относительно расширены."},
+    {id:"d3",date:"09.2025",title:"Хроническая нагрузка на поджелудочную железу",note:"α-Амилаза стойко выше нормы: 1517 (10.2025) → 1067 (06.2026). Снижается."},
+    {id:"d4",date:"02.2026",title:"Возможная гипертрофия левого желудочка",note:"ЭКГ 18.02.2026: зубец R ≥ 2,70 мВ в отв. II. Синусовая аритмия. Аномальный зубец T. Требуется эхокардиография."},
+    {id:"d5",date:"2025",title:"Нарушение функции почек (лёгкая степень)",note:"Мочевина и креатинин повышены в 10.2025. В 06.2026 креатинин нормализовался, мочевина снизилась до 10,4."},
+    {id:"d6",date:"2025",title:"Электролитный дисбаланс",note:"Хронически снижены Ca, Mg. В 06.2026 дополнительно снижены Na (139,4) и K (3,66)."},
+    {id:"d7",date:"06.2026",title:"Гипоальбуминемия",note:"Альбумин снизился с 35 (10.2025) до 29 г/л (06.2026). Возможно следствие нарушения синтетической функции печени."},
+  ],
+  visits:[
+    {id:"v1",date:"24.09.2025",reason:"УЗИ печени. Хр. гепатоз (признаки), не исключён холангит, не исключён печёночный шунт. Гиперэхогенная зона в области желчевыводящих протоков. Сосудистый рисунок ярко выражен. Рекомендован анализ на желчные кислоты.",doctor:"Зюзин В.В.",clinic:"Вет. клиника Виктория"},
+    {id:"v2",date:"24.09.2025",reason:"УЗИ желчного пузыря. Размер 2,45×1,38 см. Стенка уплотнена (0,15 см). Желчные протоки относительно расширены. Содержимое неоднородное, сладж 0,35 см.",doctor:"Зюзин В.В.",clinic:"Вет. клиника Виктория"},
+    {id:"v3",date:"23.10.2025",reason:"Плановое обследование. ОАК + биохимия. Предв. диагноз: хр. гепатоз, дисхолия, хр. гепатит. Вес 3,6 кг.",doctor:"Зюзин В.В.",clinic:"Вет. клиника Виктория"},
+    {id:"v4",date:"18.02.2026",reason:"ЭКГ + чистка зубов. Предв. диагноз: хр. МКР. Вес 3,57 кг.",doctor:"Зюзин В.В.",clinic:"Вет. клиника Виктория"},
+    {id:"v5",date:"09.07.2026",reason:"Анализ крови (ОАК + биохимия) + анализ фрагментированных эритроцитов. Предв. диагноз: хр. гепатит (?), не исключена недостаточность. Вес 3,46 кг.",doctor:"Зюзин В.В.",clinic:"Вет. клиника Виктория"},
+  ],
+  prescriptions:[
+    {id:"p1",date:"23.10.2025",name:"Кладастра",note:"2 р/д, 10 дней"},
+    {id:"p2",date:"23.10.2025",name:"Урсодезоксихолевая кислота",note:"1 раз/д на ночь, 30–60 дней"},
+    {id:"p3",date:"23.10.2025",name:"Лактобифид",note:"Натощак, 1 р/д, 10 дней"},
+    {id:"p4",date:"23.10.2025",name:"Веракол",note:"4 капли × 2 р/д после еды (через 30 мин), 28 дней"},
+    {id:"p5",date:"23.10.2025",name:"Папаверин (укол)",note:"1 р/д в 19:00, 5–7 дней"},
+    {id:"p6",date:"23.10.2025",name:"Ронколейкин (укол)",note:"1 мл подкожно, 1 раз в 3 дня — 5 уколов"},
+    {id:"p7",date:"23.10.2025",name:"Эвитон (по схеме)",note:"С 15.01.2025 по 15.02.2025"},
+    {id:"p8",date:"23.10.2025",name:"Карнитин",note:"По назначению врача"},
+    {id:"p9",date:"18.02.2026",name:"Мекситар",note:"¼ таб утром, 14–28 дней"},
+    {id:"p10",date:"18.02.2026",name:"Дентавелин",note:"2 р/д, 5–7 дней"},
+    {id:"p11",date:"18.02.2026",name:"Синуксол",note:"1 т/д, 5 дней"},
+    {id:"p12",date:"18.02.2026",name:"Лактобифид",note:"1 т/д утром до еды, 10 дней"},
+    {id:"p13",date:"09.07.2026",name:"Ливет-Нео",note:"0,3 мл × 2 р/д с едой, 14–28 дней"},
+    {id:"p14",date:"09.07.2026",name:"Лиарсин",note:"4 капли × 2 р/д за 30 мин до еды, 28 дней"},
+    {id:"p15",date:"—",name:"⚠️ Эхокардиография (назначена)",note:"По результатам ЭКГ 18.02.2026 — подтверждение/исключение гипертрофии левого желудочка и эндокардиоза"},
+  ],
+  vaccinations:[
+    {id:"vc1",date:"02.08.2015",name:"Празицид Комплекс / Барс Форте",note:"Обработка от паразитов"},
+    {id:"vc2",date:"06.03.2023",name:"Гельмимакс (дегельминтизация)",note:"Обработка от эхинококка"},
+    {id:"vc3",date:"01.06.2023",name:"Бравекто",note:"Клещи/блохи"},
+    {id:"vc4",date:"21.10.2023",name:"Бравекто",note:"Клещи/блохи"},
+    {id:"vc5",date:"23.03.2024",name:"Бравекто",note:"Клещи/блохи"},
+    {id:"vc6",date:"15.04.2024",name:"Мильбемакс (дегельминтизация)",note:"Следующая: 15.10.2024"},
+    {id:"vc7",date:"14.05.2025",name:"Мультикан-4",note:"Серия №4, годн. 09.2026. Действ. до 14.05.2026"},
+    {id:"vc8",date:"14.05.2025",name:"Рабикс (бешенство)",note:"Серия №3, годн. 02.2026. Действ. до 14.05.2026"},
+    {id:"vc9",date:"15.04.2026",name:"Nobivac DHPPi (A789C01)",note:"Действ. до 15.04.2027"},
+    {id:"vc10",date:"15.04.2026",name:"Nobivac Rabies (A750B01)",note:"Exp. 03-2028. Действ. до 15.04.2027"},
+    {id:"vc11",date:"15.04.2026",name:"Мильбемакс (дегельминтизация)",note:"Следующая: 15.10.2026"},
+  ],
+  examinations:[
+    {id:"e1",date:"24.09.2025",type:"УЗИ органов брюшной полости",label:"УЗИ — сентябрь 2025",biochem:[
+      {name:"Печень — визуализация",value:"Удовл.",unit:"",refMin:0,refMax:1,status:"ok"},
+      {name:"Печень — размер",value:"±5% от нормы",unit:"",refMin:0,refMax:1,status:"warn"},
+      {name:"Печень — контуры",value:"Не ровные",unit:"",refMin:0,refMax:1,status:"warn"},
+      {name:"Печень — эхогенность",value:"Повышена",unit:"",refMin:0,refMax:1,status:"warn"},
+      {name:"Печень — сосудистый рисунок",value:"Ярко выражен!",unit:"",refMin:0,refMax:1,status:"high"},
+      {name:"Желчный пузырь — размер",value:"2,45×1,38",unit:"см",refMin:0,refMax:1,status:"ok"},
+      {name:"Желчный пузырь — стенка",value:"0,15 уплотнена",unit:"см",refMin:0,refMax:1,status:"warn"},
+      {name:"Желчные протоки",value:"Относит. расширены",unit:"",refMin:0,refMax:1,status:"warn"},
+      {name:"Сладж",value:"0,35",unit:"см",refMin:0,refMax:1,status:"high"},
+      {name:"Заключение",value:"Хр. гепатоз. Не искл. холангит. Не искл. печ. шунт.",unit:"",refMin:0,refMax:1,status:"high"},
+    ],cbc:[]},
+    {id:"e2",date:"16.10.2025",type:"Желчные кислоты (Vet Union)",label:"Желчные кислоты — окт 2025",biochem:[
+      {name:"Желчные кислоты натощак",value:1.6,unit:"мкмоль/л",refMin:0,refMax:20,status:"ok"},
+      {name:"Желчные кислоты через 2ч после еды",value:13.5,unit:"мкмоль/л",refMin:0,refMax:30,status:"ok"},
+    ],cbc:[]},
+    {id:"e3",date:"23.10.2025",type:"Биохимия + ОАК",label:"Биохимия + ОАК — октябрь 2025",biochem:[
+      {name:"Глюкоза",value:4.7,unit:"mmol/L",refMin:3.33,refMax:6.7,status:"ok"},
+      {name:"Белок общий",value:73.3,unit:"g/l",refMin:50,refMax:72,status:"high"},
+      {name:"Мочевина",value:11.9,unit:"mmol/L",refMin:4,refMax:8,status:"high"},
+      {name:"Билирубин общий",value:4.0,unit:"mkmol/L",refMin:0,refMax:5.0,status:"ok"},
+      {name:"α-Амилаза",value:1517,unit:"U/L",refMin:300,refMax:950,status:"high"},
+      {name:"Креатинин",value:117,unit:"mkmol/L",refMin:44,refMax:115,status:"warn"},
+      {name:"АЛТ",value:60,unit:"U/L",refMin:6,refMax:70,status:"ok"},
+      {name:"АСТ",value:31,unit:"U/L",refMin:10,refMax:43,status:"ok"},
+      {name:"Кальций",value:2.09,unit:"mmol/L",refMin:2.2,refMax:2.8,status:"low"},
+      {name:"Альбумин",value:35,unit:"g/l",refMin:30,refMax:45,status:"ok"},
+      {name:"Магний",value:0.78,unit:"mmol/L",refMin:0.9,refMax:1.3,status:"low"},
+      {name:"Натрий",value:149,unit:"mmol/L",refMin:145,refMax:153,status:"ok"},
+      {name:"Калий",value:4.62,unit:"mmol/L",refMin:4.2,refMax:5.6,status:"ok"},
+    ],cbc:[
+      {name:"Гемоглобин",value:162,unit:"г/л",refMin:120,refMax:170,status:"ok"},
+      {name:"Эритроциты",value:7.1,unit:"×10¹²/л",refMin:5.4,refMax:8.0,status:"ok"},
+      {name:"Лейкоциты",value:7.1,unit:"×10⁹/л",refMin:8,refMax:12,status:"low"},
+      {name:"Гематокрит",value:47,unit:"%",refMin:37,refMax:55,status:"ok"},
+      {name:"Тромбоциты",value:437,unit:"×10⁹/л",refMin:160,refMax:500,status:"ok"},
+      {name:"Эозинофилы",value:4,unit:"%",refMin:0,refMax:3,status:"warn"},
+      {name:"Лимфоциты",value:18,unit:"%",refMin:21,refMax:40,status:"low"},
+    ]},
+    {id:"e4",date:"18.02.2026",type:"ЭКГ",label:"ЭКГ — февраль 2026",biochem:[
+      {name:"ЧСС",value:104,unit:"уд/мин",refMin:60,refMax:120,status:"ok"},
+      {name:"QRS",value:0.036,unit:"сек",refMin:0.02,refMax:0.06,status:"ok"},
+      {name:"PR",value:0.080,unit:"сек",refMin:0.06,refMax:0.13,status:"ok"},
+      {name:"QT",value:0.181,unit:"сек",refMin:0,refMax:0.22,status:"ok"},
+      {name:"Зубец R (отв. II)",value:2.70,unit:"мВ",refMin:0,refMax:2.5,status:"high"},
+      {name:"КВ от R-R",value:26.4,unit:"%",refMin:0,refMax:20,status:"high"},
+      {name:"Заключение",value:"Возможная гипертрофия лев. желудочка. Синусовая аритмия. Аномальный зубец T.",unit:"",refMin:0,refMax:1,status:"high"},
+    ],cbc:[]},
+    {id:"e5",date:"25.06.2026",type:"Биохимия + ОАК",label:"Биохимия + ОАК — июнь 2026",biochem:[
+      {name:"Глюкоза",value:4.10,unit:"mmol/L",refMin:3.33,refMax:6.7,status:"ok"},
+      {name:"Белок общий",value:74,unit:"g/l",refMin:50,refMax:72,status:"high"},
+      {name:"Мочевина",value:10.4,unit:"mmol/L",refMin:4,refMax:8,status:"high"},
+      {name:"α-Амилаза",value:1067,unit:"U/L",refMin:300,refMax:950,status:"warn"},
+      {name:"Креатинин",value:72,unit:"mkmol/L",refMin:44,refMax:115,status:"ok"},
+      {name:"АЛТ",value:93,unit:"U/L",refMin:6,refMax:70,status:"high"},
+      {name:"АСТ",value:60,unit:"U/L",refMin:10,refMax:43,status:"high"},
+      {name:"Кальций",value:2.08,unit:"mmol/L",refMin:2.2,refMax:2.8,status:"low"},
+      {name:"Альбумин",value:29,unit:"g/l",refMin:30,refMax:45,status:"low"},
+      {name:"Магний",value:0.81,unit:"mmol/L",refMin:0.9,refMax:1.3,status:"low"},
+      {name:"Натрий",value:139.4,unit:"mmol/L",refMin:145,refMax:153,status:"low"},
+      {name:"Калий",value:3.66,unit:"mmol/L",refMin:4.2,refMax:5.6,status:"low"},
+      {name:"Железо",value:18.0,unit:"mkmol/L",refMin:9.6,refMax:36,status:"ok"},
+    ],cbc:[
+      {name:"Гемоглобин",value:147,unit:"г/л",refMin:120,refMax:170,status:"ok"},
+      {name:"Эритроциты",value:6.1,unit:"×10¹²/л",refMin:5.4,refMax:8.0,status:"ok"},
+      {name:"Лейкоциты",value:10.6,unit:"×10⁹/л",refMin:8,refMax:12,status:"ok"},
+      {name:"Гематокрит",value:44,unit:"%",refMin:37,refMax:55,status:"ok"},
+      {name:"Тромбоциты",value:241,unit:"×10⁹/л",refMin:160,refMax:500,status:"ok"},
+      {name:"Эозинофилы",value:4,unit:"%",refMin:0,refMax:3,status:"warn"},
+      {name:"Лимфоциты",value:26,unit:"%",refMin:21,refMax:40,status:"ok"},
+      {name:"Моноциты",value:5,unit:"%",refMin:3,refMax:9,status:"ok"},
+    ]},
+  ],
+  sortMode:{},
+};
+
+// ── Drag list ─────────────────────────────────────────────────────────────────
+function DragList({items,setItems,renderItem,onPersist}){
+  const dragIdx=useRef(null);
+  const[overIdx,setOverIdx]=useState(null);
+  const onDragStart=(e,i)=>{dragIdx.current=i;e.dataTransfer.effectAllowed="move";};
+  const onDragOver=(e,i)=>{e.preventDefault();setOverIdx(i);};
+  const onDrop=(e,i)=>{
+    e.preventDefault();
+    if(dragIdx.current===null||dragIdx.current===i){setOverIdx(null);return;}
+    const arr=[...items];
+    const[moved]=arr.splice(dragIdx.current,1);
+    arr.splice(i,0,moved);
+    setItems(arr);onPersist(arr);
+    dragIdx.current=null;setOverIdx(null);
+  };
+  const onDragEnd=()=>{dragIdx.current=null;setOverIdx(null);};
+  return <div>{items.map((item,i)=>(
+    <div key={item.id} draggable
+      onDragStart={e=>onDragStart(e,i)} onDragOver={e=>onDragOver(e,i)}
+      onDrop={e=>onDrop(e,i)} onDragEnd={onDragEnd}
+      style={{opacity:dragIdx.current===i?0.4:1,
+        borderTop:overIdx===i&&dragIdx.current!==i?"2px solid #7c3aed":"2px solid transparent",
+        transition:"border-color 0.15s",cursor:"grab"}}>
+      {renderItem(item,i)}
+    </div>
+  ))}</div>;
+}
+
+// ── UI atoms ──────────────────────────────────────────────────────────────────
+function Badge({status}){
+  const c=SC[status]||SC.ok;
+  return <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",borderRadius:20,background:c.bg,color:c.color,fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>
+    <span style={{width:6,height:6,borderRadius:"50%",background:c.dot,display:"inline-block"}}/>
+    {c.label}
+  </span>;
+}
+function LabRow({row}){
+  const isText=isNaN(parseFloat(row.value));
+  const pct=isText?50:Math.min(100,Math.max(0,((parseFloat(row.value)-row.refMin)/(row.refMax-row.refMin))*100));
+  const c=SC[row.status]||SC.ok;
+  return <div style={{padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:isText?0:4}}>
+      <span style={{fontWeight:500,color:"#1e293b",fontSize:13,flex:1}}>{row.name}</span>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontWeight:700,color:c.color,fontSize:14}}>{row.value}</span>
+        {row.unit&&<span style={{color:"#94a3b8",fontSize:11}}>{row.unit}</span>}
+        <Badge status={row.status}/>
+      </div>
+    </div>
+    {!isText&&<div style={{display:"flex",alignItems:"center",gap:6}}>
+      <span style={{fontSize:10,color:"#94a3b8",minWidth:30}}>{row.refMin}</span>
+      <div style={{flex:1,height:4,background:"#e2e8f0",borderRadius:4,position:"relative"}}>
+        <div style={{position:"absolute",left:0,top:0,height:"100%",width:`${pct}%`,background:c.dot,borderRadius:4}}/>
+      </div>
+      <span style={{fontSize:10,color:"#94a3b8",minWidth:30,textAlign:"right"}}>{row.refMax}</span>
+    </div>}
+  </div>;
+}
+function SCard({title,accent,children}){
+  return <div style={{background:"#fff",borderRadius:16,padding:"18px 20px",boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginBottom:14,borderLeft:`4px solid ${accent||ACCENT}`}}>
+    <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:700,color:"#1e293b"}}>{title}</h3>
+    {children}
+  </div>;
+}
+function InlineField({label,value,onChange}){
+  const[edit,setEdit]=useState(false);
+  const[v,setV]=useState(value);
+  if(edit)return <div style={{marginBottom:8}}>
+    <div style={{fontSize:11,color:"#94a3b8",marginBottom:2}}>{label}</div>
+    <input value={v} onChange={e=>setV(e.target.value)}
+      style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:8,border:`1px solid ${ACCENT}`,outline:"none",boxSizing:"border-box"}}/>
+    <div style={{display:"flex",gap:6,marginTop:4}}>
+      <button onClick={()=>{onChange(v);setEdit(false);}} style={{fontSize:12,padding:"4px 12px",borderRadius:8,border:"none",background:ACCENT,color:"#fff",cursor:"pointer",fontWeight:600}}>Сохранить</button>
+      <button onClick={()=>{setV(value);setEdit(false);}} style={{fontSize:12,padding:"4px 10px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",cursor:"pointer"}}>Отмена</button>
+    </div>
+  </div>;
+  return <div onClick={()=>setEdit(true)} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #f1f5f9",cursor:"pointer",fontSize:13,alignItems:"flex-start"}}>
+    <span style={{color:"#64748b",flexShrink:0,marginRight:8}}>{label}</span>
+    <span style={{fontWeight:600,color:"#1e293b",textAlign:"right",maxWidth:"60%",wordBreak:"break-word"}}>
+      {value||<span style={{color:"#cbd5e1",fontStyle:"italic"}}>—</span>}
+      <span style={{marginLeft:5,fontSize:10,color:"#c4b5fd"}}>✏️</span>
+    </span>
+  </div>;
+}
+function EditCard({item,fields,accent,onSave,onDelete,children}){
+  const[editing,setEditing]=useState(false);
+  const[vals,setVals]=useState(()=>Object.fromEntries(fields.map(f=>[f.key,item[f.key]||""])));
+  useEffect(()=>setVals(Object.fromEntries(fields.map(f=>[f.key,item[f.key]||""]))),[item]);
+  const set=(k,v)=>setVals(p=>({...p,[k]:v}));
+  return <div style={{padding:"12px",marginBottom:10,borderRadius:12,background:accent+"11",border:`1px solid ${accent}33`}}>
+    {!editing?<>
+      {children(item)}
+      <div style={{display:"flex",gap:8,marginTop:8}}>
+        <button onClick={()=>setEditing(true)} style={{fontSize:11,padding:"3px 10px",borderRadius:8,border:`1px solid ${accent}`,background:"#fff",color:accent,cursor:"pointer",fontWeight:600}}>✏️ Изменить</button>
+        <button onClick={onDelete} style={{fontSize:11,padding:"3px 10px",borderRadius:8,border:"1px solid #fca5a5",background:"#fff",color:"#ef4444",cursor:"pointer"}}>✕ Удалить</button>
+      </div>
+    </>:<>
+      {fields.map(f=><div key={f.key} style={{marginBottom:8}}>
+        <div style={{fontSize:11,color:"#64748b",marginBottom:2}}>{f.label}</div>
+        {f.multiline
+          ?<textarea value={vals[f.key]} onChange={e=>set(f.key,e.target.value)} rows={3}
+              style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:8,border:`1px solid ${accent}`,outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+          :<input value={vals[f.key]} onChange={e=>set(f.key,e.target.value)}
+              style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:8,border:`1px solid ${accent}`,outline:"none",boxSizing:"border-box"}}/>}
+      </div>)}
+      <div style={{display:"flex",gap:8,marginTop:6}}>
+        <button onClick={()=>{onSave(vals);setEditing(false);}} style={{flex:1,padding:"7px",borderRadius:10,border:"none",background:accent,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Сохранить</button>
+        <button onClick={()=>{setVals(Object.fromEntries(fields.map(f=>[f.key,item[f.key]||""])));setEditing(false);}} style={{padding:"7px 14px",borderRadius:10,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontSize:13,cursor:"pointer"}}>Отмена</button>
+      </div>
+    </>}
+  </div>;
+}
+function AddBtn({label,onClick,accent}){
+  return <button onClick={onClick} style={{width:"100%",padding:"10px",borderRadius:12,border:`1.5px dashed ${accent}80`,background:"transparent",color:accent,fontWeight:700,fontSize:13,cursor:"pointer",marginTop:4}}>+ {label}</button>;
+}
+function AddForm({fields,onSave,onCancel,accent}){
+  const[vals,setVals]=useState(()=>Object.fromEntries(fields.map(f=>[f.key,""])));
+  const set=(k,v)=>setVals(p=>({...p,[k]:v}));
+  return <div style={{background:"#faf5ff",border:`1px solid ${accent}40`,borderRadius:12,padding:"14px",marginBottom:12}}>
+    {fields.map(f=><div key={f.key} style={{marginBottom:8}}>
+      <div style={{fontSize:11,color:"#64748b",marginBottom:3}}>{f.label}</div>
+      {f.multiline
+        ?<textarea value={vals[f.key]} onChange={e=>set(f.key,e.target.value)} rows={2} placeholder={f.placeholder||""}
+            style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:8,border:"1px solid #e2e8f0",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+        :<input value={vals[f.key]} onChange={e=>set(f.key,e.target.value)} placeholder={f.placeholder||""}
+            style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:8,border:"1px solid #e2e8f0",outline:"none",boxSizing:"border-box"}}/>}
+    </div>)}
+    <div style={{display:"flex",gap:8,marginTop:6}}>
+      <button onClick={()=>onSave(vals)} style={{flex:1,padding:"8px",borderRadius:10,border:"none",background:accent,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Добавить</button>
+      <button onClick={onCancel} style={{padding:"8px 14px",borderRadius:10,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontSize:13,cursor:"pointer"}}>Отмена</button>
+    </div>
+  </div>;
+}
+function SortToggle({mode,onToggle}){
+  return <button onClick={onToggle}
+    style={{fontSize:11,padding:"4px 12px",borderRadius:20,border:`1px solid ${ACCENT}`,
+      background:mode==="date"?"#ede9fe":"#fff",color:ACCENT,cursor:"pointer",fontWeight:600,marginBottom:10}}>
+    {mode==="date"?"📅 По дате (авто)":"⠿ Ручной порядок (drag)"}
+  </button>;
+}
+
+// ── Main App ──────────────────────────────────────────────────────────────────
+function App(){
+  const[loaded,setLoaded]=useState(false);
+  const[saved,setSaved]=useState(false);
+  const[tab,setTab]=useState("overview");
+  const[examOpen,setExamOpen]=useState(null);
+  const[examSec,setExamSec]=useState("biochem");
+  const[dogInfo,setDogInfoS]=useState(DEF.dogInfo);
+  const[diagnoses,setDiagnoses]=useState(DEF.diagnoses);
+  const[visits,setVisits]=useState(DEF.visits);
+  const[prescriptions,setPrescriptions]=useState(DEF.prescriptions);
+  const[vaccinations,setVaccinations]=useState(DEF.vaccinations);
+  const[examinations,setExaminations]=useState(DEF.examinations);
+  const[sortMode,setSortMode]=useState({});
+  const[adding,setAdding]=useState({});
+
+  useEffect(()=>{
+    try{
+      const r=storage.get("ls-card-html-v1");
+      if(r&&r.value){
+        const d=JSON.parse(r.value);
+        if(d.dogInfo)setDogInfoS(d.dogInfo);
+        if(d.diagnoses)setDiagnoses(d.diagnoses);
+        if(d.visits)setVisits(d.visits);
+        if(d.prescriptions)setPrescriptions(d.prescriptions);
+        if(d.vaccinations)setVaccinations(d.vaccinations);
+        if(d.examinations)setExaminations(d.examinations);
+        if(d.sortMode)setSortMode(d.sortMode);
+      }
+    }catch(_){}
+    setLoaded(true);
+  },[]);
+
+  const persist=useCallback((di,diag,vis,pres,vacc,ex,sm)=>{
+    try{
+      storage.set("ls-card-html-v1",JSON.stringify({dogInfo:di,diagnoses:diag,visits:vis,prescriptions:pres,vaccinations:vacc,examinations:ex,sortMode:sm}));
+      setSaved(true);setTimeout(()=>setSaved(false),2000);
+    }catch(_){}
+  },[]);
+
+  const snap=(di=dogInfo,diag=diagnoses,vis=visits,pres=prescriptions,vacc=vaccinations,ex=examinations,sm=sortMode)=>
+    persist(di,diag,vis,pres,vacc,ex,sm);
+
+  const setDog=(k,v)=>{const nd={...dogInfo,[k]:v};setDogInfoS(nd);snap(nd);};
+
+  const getMode=(key)=>sortMode[key]||"date";
+  const sortedList=(list,key)=>getMode(key)==="date"?[...list].sort((a,b)=>parseDate(b.date)-parseDate(a.date)):list;
+  const toggleSort=(key)=>{
+    const nm={...sortMode,[key]:getMode(key)==="date"?"manual":"date"};
+    setSortMode(nm);snap(dogInfo,diagnoses,visits,prescriptions,vaccinations,examinations,nm);
+  };
+
+  const upd=(list,setter,id,vals,key)=>{
+    let nl=list.map(x=>x.id===id?{...x,...vals}:x);
+    if(getMode(key)==="date")nl=[...nl].sort((a,b)=>parseDate(b.date)-parseDate(a.date));
+    setter(nl);
+    snap(dogInfo,key==="diag"?nl:diagnoses,key==="visit"?nl:visits,key==="pres"?nl:prescriptions,key==="vacc"?nl:vaccinations,key==="exam"?nl:examinations);
+  };
+  const del=(list,setter,id,key)=>{
+    const nl=list.filter(x=>x.id!==id);setter(nl);
+    snap(dogInfo,key==="diag"?nl:diagnoses,key==="visit"?nl:visits,key==="pres"?nl:prescriptions,key==="vacc"?nl:vaccinations,key==="exam"?nl:examinations);
+  };
+  const add=(list,setter,vals,key)=>{
+    let nl=[...list,{id:uid(),...vals}];
+    if(getMode(key)==="date")nl=[...nl].sort((a,b)=>parseDate(b.date)-parseDate(a.date));
+    setter(nl);
+    snap(dogInfo,key==="diag"?nl:diagnoses,key==="visit"?nl:visits,key==="pres"?nl:prescriptions,key==="vacc"?nl:vaccinations,key==="exam"?nl:examinations);
+  };
+  const reorder=(nl,setter,key)=>{
+    setter(nl);
+    snap(dogInfo,key==="diag"?nl:diagnoses,key==="visit"?nl:visits,key==="pres"?nl:prescriptions,key==="vacc"?nl:vaccinations,key==="exam"?nl:examinations);
+  };
+
+  if(!loaded)return <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:"#f8fafc",color:ACCENT,fontSize:16,fontWeight:600}}>Загрузка…</div>;
+
+  const openExam=examinations.find(e=>e.id===examOpen);
+  const lastBio=[...examinations].filter(e=>e.type.includes("Биохимия")).sort((a,b)=>parseDate(b.date)-parseDate(a.date))[0];
+
+  const diagF=[{key:"date",label:"Дата"},{key:"title",label:"Диагноз"},{key:"note",label:"Примечание",multiline:true}];
+  const visitF=[{key:"date",label:"Дата"},{key:"reason",label:"Причина / описание",multiline:true},{key:"doctor",label:"Врач"},{key:"clinic",label:"Клиника"}];
+  const presF=[{key:"date",label:"Дата"},{key:"name",label:"Препарат"},{key:"note",label:"Дозировка / схема",multiline:true}];
+  const vaccF=[{key:"date",label:"Дата"},{key:"name",label:"Препарат"},{key:"note",label:"Примечание",multiline:true}];
+
+  function Section({list,setter,tabKey,accent,fields,addLabel,addKey,renderContent}){
+    const mode=getMode(tabKey);
+    const display=sortedList(list,tabKey);
+    const renderItem=(item)=>(
+      <EditCard key={item.id} item={item} fields={fields} accent={accent}
+        onSave={v=>upd(list,setter,item.id,v,tabKey)}
+        onDelete={()=>del(list,setter,item.id,tabKey)}>
+        {renderContent}
+      </EditCard>
+    );
+    return <>
+      <SortToggle mode={mode} onToggle={()=>toggleSort(tabKey)}/>
+      {mode==="manual"&&<div style={{fontSize:11,color:"#a78bfa",marginBottom:10}}>⠿ Перетащите для изменения порядка</div>}
+      {mode==="manual"
+        ?<DragList items={display} setItems={nl=>reorder(nl,setter,tabKey)} onPersist={nl=>reorder(nl,setter,tabKey)} renderItem={renderItem}/>
+        :<div>{display.map(item=>renderItem(item))}</div>}
+      {adding[addKey]
+        ?<AddForm accent={accent} fields={fields}
+            onSave={v=>{add(list,setter,v,tabKey);setAdding({});}}
+            onCancel={()=>setAdding({})}/>
+        :<AddBtn label={addLabel} accent={accent} onClick={()=>setAdding({[addKey]:true})}/>}
+    </>;
+  }
+
+  return <div style={{minHeight:"100vh",background:"#f8fafc",paddingBottom:40}}>
+
+    {saved&&<div style={{position:"fixed",top:16,right:16,zIndex:999,background:"#4c1d95",color:"#fff",padding:"8px 16px",borderRadius:12,fontSize:13,fontWeight:600,boxShadow:"0 4px 12px rgba(0,0,0,0.2)"}}>✓ Сохранено</div>}
+
+    {/* Header */}
+    <div style={{background:"linear-gradient(135deg,#4c1d95 0%,#7c3aed 60%,#a855f7 100%)",padding:"28px 20px 20px",color:"#fff"}}>
+      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:18}}>
+        <div style={{width:60,height:60,borderRadius:"50%",background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,border:"2px solid rgba(255,255,255,0.3)"}}>🐕</div>
+        <div>
+          <div style={{fontSize:21,fontWeight:800}}>{dogInfo.name}</div>
+          <div style={{fontSize:12,opacity:0.85,marginTop:2}}>{dogInfo.breed} · {dogInfo.age} лет</div>
+          <div style={{fontSize:11,opacity:0.7,marginTop:1}}>Владелец: {dogInfo.owner}</div>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+        {[["Возраст",dogInfo.age+" лет"],["Чип",dogInfo.microchip],["Посл. анализ",lastBio?lastBio.date:"—"]].map(([l,v])=>
+          <div key={l} style={{background:"rgba(255,255,255,0.12)",borderRadius:10,padding:"7px 8px",textAlign:"center"}}>
+            <div style={{fontSize:12,fontWeight:700}}>{v}</div>
+            <div style={{fontSize:10,opacity:0.75,marginTop:1}}>{l}</div>
+          </div>)}
+      </div>
+    </div>
+
+    {/* Tabs */}
+    <div style={{display:"flex",overflowX:"auto",background:"#fff",borderBottom:"1px solid #e2e8f0",padding:"0 4px"}}>
+      {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)}
+        style={{border:"none",background:"none",cursor:"pointer",padding:"10px 12px",whiteSpace:"nowrap",
+          display:"flex",flexDirection:"column",alignItems:"center",gap:2,
+          borderBottom:tab===t.id?"2px solid #7c3aed":"2px solid transparent",
+          color:tab===t.id?"#7c3aed":"#64748b",fontWeight:tab===t.id?700:400,fontSize:10}}>
+        <span style={{fontSize:17}}>{t.icon}</span>{t.label}
+      </button>)}
+    </div>
+
+    <div style={{padding:"14px"}}>
+
+      {tab==="overview"&&<div>
+        <div style={{fontSize:11,color:"#a78bfa",marginBottom:10,textAlign:"right"}}>✏️ Нажмите на поле для редактирования</div>
+        <div style={{background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:14,padding:"12px 16px",marginBottom:14,display:"flex",gap:10}}>
+          <span style={{fontSize:20}}>🚨</span>
+          <div>
+            <div style={{fontWeight:700,fontSize:13,color:"#dc2626"}}>Требует действий</div>
+            <div style={{fontSize:12,color:"#7f1d1d",marginTop:4,lineHeight:1.6}}>
+              • ЭКГ 18.02.2026: возможная гипертрофия левого желудочка — <strong>необходима эхокардиография</strong><br/>
+              • АЛТ 93 и АСТ 60 (06.2026) — нарастает нагрузка на печень
+            </div>
+          </div>
+        </div>
+        <SCard title="Основная информация" accent={ACCENT}>
+          {[["name","Кличка"],["breed","Порода"],["age","Возраст (лет)"],["dob","Дата рождения"],["owner","Владелец"],["clinic","Клиника"],["microchip","Микрочип"],["color","Окрас"]].map(([k,l])=>
+            <InlineField key={k} label={l} value={dogInfo[k]} onChange={v=>setDog(k,v)}/>)}
+        </SCard>
+        <SCard title="Активные проблемы" accent="#ef4444">
+          {diagnoses.map(d=><div key={d.id} style={{display:"flex",gap:8,padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
+            <span style={{fontSize:15,flexShrink:0}}>⚠️</span>
+            <div>
+              <div style={{fontWeight:600,fontSize:13,color:"#1e293b"}}>{d.title}</div>
+              <div style={{fontSize:12,color:"#64748b",marginTop:2}}>{d.note}</div>
+              <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>{d.date}</div>
+            </div>
+          </div>)}
+        </SCard>
+      </div>}
+
+      {tab==="diagnoses"&&
+        <SCard title="Хронические диагнозы" accent="#ef4444">
+          <Section list={diagnoses} setter={setDiagnoses} tabKey="diag" accent="#ef4444" fields={diagF} addLabel="Добавить диагноз" addKey="diag"
+            renderContent={item=><>
+              <div style={{fontWeight:700,fontSize:13,color:"#1e293b"}}>{item.title}</div>
+              <div style={{fontSize:12,color:"#64748b",marginTop:3}}>{item.note}</div>
+              <div style={{fontSize:11,color:"#94a3b8",marginTop:3}}>{item.date}</div>
+            </>}/>
+        </SCard>}
+
+      {tab==="exams"&&!examOpen&&<div>
+        <SortToggle mode={getMode("exam")} onToggle={()=>toggleSort("exam")}/>
+        {getMode("exam")==="manual"&&<div style={{fontSize:11,color:"#a78bfa",marginBottom:10}}>⠿ Перетащите для изменения порядка</div>}
+        {adding.exam
+          ?<AddForm accent={ACCENT}
+              fields={[{key:"label",label:"Название"},{key:"date",label:"Дата",placeholder:"01.01.2026"},{key:"type",label:"Тип"}]}
+              onSave={v=>{const ne=[...examinations,{id:uid(),...v,biochem:[],cbc:[]}];setExaminations(ne);snap(dogInfo,diagnoses,visits,prescriptions,vaccinations,ne);setAdding({});}}
+              onCancel={()=>setAdding({})}/>
+          :<AddBtn label="Добавить обследование" accent={ACCENT} onClick={()=>setAdding({exam:true})}/>}
+        {(()=>{
+          const mode=getMode("exam");
+          const list=mode==="date"?[...examinations].sort((a,b)=>parseDate(b.date)-parseDate(a.date)):examinations;
+          const renderE=(e)=>{
+            const bad=[...e.biochem,...e.cbc].filter(r=>r.status!=="ok").length;
+            return <div style={{background:"#fff",borderRadius:14,padding:"14px",marginBottom:10,boxShadow:"0 1px 3px rgba(0,0,0,0.07)",border:"1px solid #e2e8f0",position:"relative"}}>
+              <div onClick={()=>{setExamOpen(e.id);setExamSec("biochem");}} style={{cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontWeight:700,fontSize:14,color:"#1e293b"}}>{e.label}</div>
+                  <div style={{fontSize:12,color:"#64748b",marginTop:2}}>{e.type} · {e.date}</div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+                  {bad>0&&<span style={{fontSize:11,background:"#fef2f2",color:"#ef4444",padding:"2px 8px",borderRadius:20,fontWeight:600}}>{bad} отклонений</span>}
+                  <span style={{fontSize:20,color:"#94a3b8"}}>›</span>
+                </div>
+              </div>
+              <button onClick={()=>{const ne=examinations.filter(x=>x.id!==e.id);setExaminations(ne);snap(dogInfo,diagnoses,visits,prescriptions,vaccinations,ne);}}
+                style={{position:"absolute",top:10,right:10,border:"none",background:"none",cursor:"pointer",color:"#fca5a5",fontSize:14}}>✕</button>
+            </div>;
+          };
+          return mode==="manual"
+            ?<DragList items={list} setItems={nl=>reorder(nl,setExaminations,"exam")} onPersist={nl=>reorder(nl,setExaminations,"exam")} renderItem={renderE}/>
+            :<div>{list.map(e=>renderE(e))}</div>;
+        })()}
+      </div>}
+
+      {tab==="exams"&&examOpen&&openExam&&<div>
+        <button onClick={()=>setExamOpen(null)} style={{border:"none",background:"none",cursor:"pointer",color:ACCENT,fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:4,marginBottom:14,padding:0}}>‹ Все обследования</button>
+        <div style={{background:"#fff",borderRadius:14,padding:"14px",marginBottom:14,boxShadow:"0 1px 3px rgba(0,0,0,0.07)"}}>
+          <div style={{fontWeight:800,fontSize:15,color:"#1e293b"}}>{openExam.label}</div>
+          <div style={{fontSize:12,color:"#64748b",marginTop:2}}>{openExam.type} · {openExam.date}</div>
+        </div>
+        {openExam.cbc.length>0&&<div style={{display:"flex",gap:8,marginBottom:14}}>
+          {[["biochem","Биохимия / Данные"],["cbc","ОАК"]].map(([id,label])=>
+            <button key={id} onClick={()=>setExamSec(id)} style={{flex:1,padding:"8px 0",borderRadius:10,border:"none",cursor:"pointer",fontWeight:700,fontSize:13,background:examSec===id?ACCENT:"#e2e8f0",color:examSec===id?"#fff":"#64748b"}}>{label}</button>)}
+        </div>}
+        <div style={{background:"#fff",borderRadius:14,padding:"4px 14px",boxShadow:"0 1px 3px rgba(0,0,0,0.07)",marginBottom:14}}>
+          {(openExam.cbc.length>0?(examSec==="biochem"?openExam.biochem:openExam.cbc):openExam.biochem).map((row,i)=><LabRow key={i} row={row}/>)}
+        </div>
+        {adding.labRow
+          ?<AddForm accent={ACCENT}
+              fields={[{key:"name",label:"Показатель"},{key:"value",label:"Значение"},{key:"unit",label:"Единица"},{key:"refMin",label:"Норма от"},{key:"refMax",label:"Норма до"}]}
+              onSave={v=>{const sec=openExam.cbc.length>0?examSec:"biochem";const status=autoStatus(v.value,v.refMin,v.refMax);const row={name:v.name,value:parseFloat(v.value)||v.value,unit:v.unit,refMin:parseFloat(v.refMin)||0,refMax:parseFloat(v.refMax)||0,status};const ne=examinations.map(e=>e.id!==openExam.id?e:{...e,[sec]:[...e[sec],row]});setExaminations(ne);snap(dogInfo,diagnoses,visits,prescriptions,vaccinations,ne);setAdding({});}}
+              onCancel={()=>setAdding({})}/>
+          :<AddBtn label="Добавить показатель" accent={ACCENT} onClick={()=>setAdding({labRow:true})}/>}
+      </div>}
+
+      {tab==="visits"&&
+        <SCard title="Визиты к ветеринару" accent="#0ea5e9">
+          <Section list={visits} setter={setVisits} tabKey="visit" accent="#0ea5e9" fields={visitF} addLabel="Добавить визит" addKey="visit"
+            renderContent={item=><>
+              <div style={{display:"flex",justifyContent:"space-between"}}>
+                <span style={{fontWeight:700,fontSize:13,color:"#0369a1"}}>{item.date}</span>
+                <span style={{fontSize:11,color:"#64748b"}}>{item.clinic}</span>
+              </div>
+              <div style={{fontSize:13,color:"#1e293b",marginTop:4}}>{item.reason}</div>
+              <div style={{fontSize:12,color:"#64748b",marginTop:2}}>Врач: {item.doctor}</div>
+            </>}/>
+        </SCard>}
+
+      {tab==="vaccinations"&&
+        <SCard title="Вакцинации и обработки" accent="#f59e0b">
+          <Section list={vaccinations} setter={setVaccinations} tabKey="vacc" accent="#f59e0b" fields={vaccF} addLabel="Добавить вакцинацию / обработку" addKey="vacc"
+            renderContent={item=><>
+              <div style={{display:"flex",justifyContent:"space-between"}}>
+                <span style={{fontWeight:700,fontSize:13,color:"#92400e",flex:1}}>{item.name}</span>
+                <span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>{item.date}</span>
+              </div>
+              <div style={{fontSize:12,color:"#64748b",marginTop:3}}>{item.note}</div>
+            </>}/>
+        </SCard>}
+
+      {tab==="prescriptions"&&<div>
+        <SortToggle mode={getMode("pres")} onToggle={()=>toggleSort("pres")}/>
+        {getMode("pres")==="manual"&&<div style={{fontSize:11,color:"#a78bfa",marginBottom:10}}>⠿ Перетащите для изменения порядка</div>}
+        {(()=>{
+          const mode=getMode("pres");
+          const list=sortedList(prescriptions,"pres");
+          const renderP=(item)=>(
+            <EditCard key={item.id} item={item} fields={presF} accent={item.name.includes("⚠️")?"#ef4444":"#22c55e"}
+              onSave={v=>upd(prescriptions,setPrescriptions,item.id,v,"pres")}
+              onDelete={()=>del(prescriptions,setPrescriptions,item.id,"pres")}>
+              {()=><>
+                <div style={{fontWeight:700,fontSize:13,color:item.name.includes("⚠️")?"#dc2626":"#166534"}}>{item.name}</div>
+                <div style={{fontSize:11,color:"#94a3b8",marginTop:1}}>{item.date}</div>
+                <div style={{fontSize:12,color:"#374151",marginTop:3}}>{item.note}</div>
+              </>}
+            </EditCard>
+          );
+          if(mode==="manual"){
+            return <DragList items={list} setItems={nl=>reorder(nl,setPrescriptions,"pres")} onPersist={nl=>reorder(nl,setPrescriptions,"pres")} renderItem={renderP}/>;
+          }
+          const dates=[...new Set(list.map(p=>p.date))];
+          return dates.map(date=>{
+            const group=list.filter(p=>p.date===date);
+            const ac=date.includes("⚠️")||date==="—"?"#ef4444":"#22c55e";
+            return <SCard key={date} title={`📅 ${date}`} accent={ac}>{group.map(item=>renderP(item))}</SCard>;
+          });
+        })()}
+        {adding.pres
+          ?<AddForm accent="#22c55e" fields={presF}
+              onSave={v=>{add(prescriptions,setPrescriptions,v,"pres");setAdding({});}}
+              onCancel={()=>setAdding({})}/>
+          :<AddBtn label="Добавить назначение" accent="#22c55e" onClick={()=>setAdding({pres:true})}/>}
+      </div>}
+
+    </div>
+    <div style={{textAlign:"center",padding:"20px 0 8px",color:"#cbd5e1",fontSize:11}}>
+      Лаки Стар · Медицинская карта · данные сохраняются в браузере
+    </div>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
