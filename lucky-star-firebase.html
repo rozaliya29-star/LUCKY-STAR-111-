@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Лаки Стар — Медкарта</title>
+<meta name="theme-color" content="#4c1d95"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Лаки Стар"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+<script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").then(r=>console.log("SW registered")).catch(e=>console.log("SW error",e));
+  });
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#f6f7f9;--surface:#fff;--ink:#1e293b;--ink2:#64748b;--ink3:#94a3b8;
+  --line:#e2e8f0;--line2:#f1f5f9;
+  --purple:#7c3aed;--purple-d:#5b21b6;--purple-s:#ede9fe;--purple-t:#ddd6fe;
+  --rose:#e11d48;--rose-s:#fff1f2;--rose-t:#fecdd3;
+  --teal:#0d9488;--teal-s:#f0fdfa;--teal-t:#99f6e4;
+  --amber:#d97706;--amber-s:#fffbeb;--amber-t:#fde68a;
+  --blue:#2563eb;--blue-s:#eff6ff;--blue-t:#bfdbfe;
+  --green:#16a34a;--green-s:#f0fdf4;
+  --red:#dc2626;--red-s:#fef2f2;
+}
+body{background:var(--bg);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+.shell{min-height:100vh;max-width:640px;margin:0 auto;padding:0 0 96px;}
+.serif{font-family:'Fraunces',serif;}
+.mono{font-family:'JetBrains Mono',monospace;}
+
+/* Header */
+.hdr{background:linear-gradient(135deg,#3b0764,#5b21b6 50%,#7c3aed);padding:calc(18px + env(safe-area-inset-top)) 18px 18px;color:#fff;}
+.hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.hdr-dog{display:flex;align-items:center;gap:12px;}
+.hdr-avatar{width:52px;height:52px;border-radius:16px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;font-size:26px;border:2px solid rgba(255,255,255,0.25);overflow:hidden;flex-shrink:0;}
+.hdr-avatar img{width:100%;height:100%;object-fit:cover;}
+.hdr-name{font-family:'Fraunces',serif;font-weight:700;font-size:22px;letter-spacing:-0.3px;}
+.hdr-sub{font-size:12px;opacity:0.75;margin-top:2px;}
+.hdr-save{font-size:11px;opacity:0.7;display:flex;align-items:center;gap:4px;}
+.hdr-btns{display:flex;gap:8px;align-items:center;}
+.icon-btn{width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,0.15);border:none;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;position:relative;flex-shrink:0;}
+.notif-dot{position:absolute;top:7px;right:8px;width:7px;height:7px;border-radius:50%;background:#f43f5e;border:1.5px solid transparent;}
+.hdr-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.hdr-stat{background:rgba(255,255,255,0.12);border-radius:12px;padding:8px 10px;text-align:center;}
+.hdr-stat-val{font-size:13px;font-weight:700;}
+.hdr-stat-lbl{font-size:10px;opacity:0.7;margin-top:2px;}
+
+/* Alert banner */
+.alert-banner{margin:14px 14px 0;background:var(--rose-s);border:1px solid var(--rose-t);border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;}
+.alert-banner-icon{font-size:18px;flex-shrink:0;}
+.alert-banner-title{font-weight:700;font-size:13px;color:var(--rose);margin-bottom:4px;}
+.alert-banner-body{font-size:12px;color:#9f1239;line-height:1.6;}
+
+/* Bottom nav */
+.bnav{position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--surface);border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-around;padding:8px 8px calc(8px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto;box-shadow:0 -4px 16px -8px rgba(0,0,0,0.15);}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;color:var(--ink3);font-size:10px;font-weight:600;cursor:pointer;padding:4px 10px;font-family:'Inter',sans-serif;transition:color 0.15s;}
+.bnav-item.active{color:var(--purple);}
+.bnav-icon{font-size:20px;}
+
+/* Section */
+.section{padding:14px;}
+.section-title{font-family:'Fraunces',serif;font-weight:700;font-size:18px;color:var(--ink);margin-bottom:14px;}
+
+/* Cards */
+.card{background:var(--surface);border-radius:16px;border:1px solid var(--line);box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:10px;overflow:hidden;}
+.card-stripe{border-left:4px solid var(--stripe,var(--purple));}
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 0;}
+.card-title{font-weight:700;font-size:14px;color:var(--ink);}
+.card-body{padding:8px 16px 14px;}
+.card-row{display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--line2);font-size:13px;}
+.card-row:last-child{border-bottom:none;}
+.card-row-label{color:var(--ink2);flex-shrink:0;margin-right:8px;}
+.card-row-val{font-weight:600;color:var(--ink);text-align:right;word-break:break-word;}
+
+/* Record item */
+.rec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:8px;}
+.rec-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;}
+.rec-title{font-weight:700;font-size:13px;color:var(--ink);}
+.rec-date{font-size:11px;color:var(--ink3);font-family:'JetBrains Mono',monospace;flex-shrink:0;margin-left:8px;}
+.rec-note{font-size:12px;color:var(--ink2);line-height:1.5;margin-top:3px;}
+.rec-next{display:inline-flex;align-items:center;gap:4px;margin-top:6px;background:var(--purple-s);border-radius:20px;padding:3px 10px;font-size:11px;color:var(--purple-d);font-weight:600;}
+.rec-next.overdue{background:var(--rose-s);color:var(--rose);}
+.rec-next.soon{background:var(--amber-s);color:var(--amber);}
+.rec-actions{display:flex;gap:6px;margin-top:8px;}
+.rec-btn{font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid var(--line);background:var(--surface);color:var(--ink2);cursor:pointer;font-weight:600;}
+.rec-btn.edit{border-color:var(--purple-t);color:var(--purple);}
+.rec-btn.del{border-color:var(--rose-t);color:var(--rose);}
+
+/* Badge */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;}
+.badge-ok{background:var(--green-s);color:var(--green);}
+.badge-warn{background:var(--amber-s);color:var(--amber);}
+.badge-high{background:var(--red-s);color:var(--red);}
+.badge-low{background:var(--blue-s);color:var(--blue);}
+
+/* Lab rows */
+.lab-row{padding:10px 0;border-bottom:1px solid var(--line2);}
+.lab-row:last-child{border-bottom:none;}
+.lab-row-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.lab-name{font-size:13px;font-weight:500;color:var(--ink);}
+.lab-val-wrap{display:flex;align-items:center;gap:6px;}
+.lab-val{font-size:14px;font-weight:700;}
+.lab-unit{font-size:11px;color:var(--ink3);}
+.lab-bar-wrap{display:flex;align-items:center;gap:5px;}
+.lab-bar-ref{font-size:10px;color:var(--ink3);min-width:28px;}
+.lab-bar{flex:1;height:4px;background:var(--line);border-radius:4px;position:relative;overflow:hidden;}
+.lab-bar-fill{position:absolute;left:0;top:0;height:100%;border-radius:4px;}
+
+/* Inputs */
+.inp{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px;font-family:'Inter',sans-serif;color:var(--ink);outline:none;}
+.inp:focus{border-color:var(--purple);}
+.inp-label{font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:4px;display:block;}
+.inp-group{margin-bottom:12px;}
+textarea.inp{resize:vertical;min-height:70px;}
+
+/* Form sheet */
+.sheet-overlay{position:fixed;inset:0;background:rgba(15,15,25,0.5);z-index:100;display:flex;align-items:flex-end;justify-content:center;}
+.sheet{background:var(--surface);border-radius:22px 22px 0 0;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;padding:20px 18px calc(20px + env(safe-area-inset-bottom));}
+.sheet-title{font-family:'Fraunces',serif;font-weight:700;font-size:18px;color:var(--ink);margin-bottom:16px;}
+.sheet-btns{display:flex;gap:10px;margin-top:16px;}
+.btn{border:none;border-radius:12px;padding:12px 18px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;transition:opacity 0.15s;}
+.btn:active{opacity:0.8;}
+.btn-primary{background:var(--purple);color:#fff;flex:1;}
+.btn-ghost{background:var(--line2);color:var(--ink2);}
+.btn-danger{background:var(--rose-s);color:var(--rose);flex:1;border:1px solid var(--rose-t);}
+
+/* Notif panel */
+.notif-overlay{position:fixed;inset:0;background:rgba(15,15,25,0.5);z-index:200;display:flex;align-items:flex-start;justify-content:center;padding:60px 14px 14px;}
+.notif-panel{background:var(--surface);border-radius:20px;width:100%;max-width:500px;max-height:80vh;overflow-y:auto;box-shadow:0 24px 60px -12px rgba(0,0,0,0.35);}
+.notif-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);}
+.notif-head-title{font-family:'Fraunces',serif;font-weight:700;font-size:17px;}
+.notif-body{padding:10px 14px 16px;}
+.notif-section{margin-top:12px;}
+.notif-section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink3);margin-bottom:8px;}
+.notif-row{display:flex;align-items:center;gap:10px;background:var(--line2);border-radius:12px;padding:10px 12px;margin-bottom:6px;font-size:13px;}
+.notif-row-icon{font-size:16px;}
+.notif-row-text{flex:1;font-weight:600;color:var(--ink);}
+.notif-row-date{font-size:11px;color:var(--ink3);font-family:'JetBrains Mono',monospace;}
+.notif-empty{text-align:center;padding:24px 0;color:var(--ink3);font-size:14px;}
+
+/* Tabs inside section */
+.subtabs{display:flex;background:var(--line2);border-radius:12px;padding:3px;gap:3px;margin-bottom:14px;}
+.subtab{flex:1;border:none;background:none;border-radius:9px;padding:7px 4px;font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;font-family:'Inter',sans-serif;}
+.subtab.active{background:var(--surface);color:var(--purple);box-shadow:0 1px 4px rgba(0,0,0,0.08);}
+
+/* Add button */
+.add-row{display:flex;justify-content:flex-end;margin-bottom:10px;}
+.add-btn{display:inline-flex;align-items:center;gap:5px;background:var(--purple-s);border:none;color:var(--purple-d);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;}
+.add-btn:active{opacity:0.8;}
+
+/* Photo grid */
+.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;}
+.photo-tile{aspect-ratio:1;border-radius:12px;overflow:hidden;background:var(--line2);position:relative;cursor:pointer;}
+.photo-tile img{width:100%;height:100%;object-fit:cover;}
+.photo-tile-add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:13px;color:var(--ink3);border:1.5px dashed var(--line);border-radius:12px;cursor:pointer;}
+.photo-tile-del{position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:6px;width:22px;height:22px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.photo-tile-main{position:absolute;bottom:4px;left:4px;background:var(--purple);color:#fff;font-size:9px;font-weight:700;border-radius:6px;padding:2px 6px;text-transform:uppercase;}
+
+/* Doc list */
+.doc-item{display:flex;align-items:center;gap:10px;background:var(--line2);border-radius:10px;padding:10px 12px;margin-bottom:6px;}
+.doc-icon{font-size:18px;flex-shrink:0;}
+.doc-body{flex:1;min-width:0;}
+.doc-name{font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.doc-meta{font-size:11px;color:var(--ink3);margin-top:2px;}
+.doc-link{color:var(--purple);font-size:11px;font-weight:600;text-decoration:none;}
+.doc-del{background:none;border:none;color:var(--ink3);cursor:pointer;font-size:16px;padding:2px;}
+
+/* Progress upload */
+.upload-progress{background:var(--line2);border-radius:8px;height:6px;overflow:hidden;margin-top:8px;}
+.upload-progress-fill{height:100%;background:var(--purple);border-radius:8px;transition:width 0.3s;}
+
+/* Backup bar */
+.backup-bar{display:flex;gap:8px;flex-wrap:wrap;background:var(--amber-s);border:1px solid var(--amber-t);border-radius:12px;padding:10px 14px;margin:14px 14px 0;font-size:12px;color:#78350f;align-items:center;}
+.backup-bar-text{flex:1;min-width:140px;}
+.backup-btn{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid var(--amber-t);color:#78350f;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;}
+
+/* History */
+.hist-row{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line2);font-size:12px;}
+.hist-row:last-child{border-bottom:none;}
+.hist-dot{width:8px;height:8px;border-radius:50%;background:var(--purple);margin-top:4px;flex-shrink:0;}
+.hist-body{flex:1;}
+.hist-what{font-weight:600;color:var(--ink);}
+.hist-when{color:var(--ink3);margin-top:1px;}
+
+/* Loading */
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:12px;color:var(--purple);}
+.loading-title{font-family:'Fraunces',serif;font-weight:700;font-size:18px;}
+.spinner{width:36px;height:36px;border:3px solid var(--purple-s);border-top-color:var(--purple);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* Inline editable */
+.inline-edit-wrap{cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--line2);}
+.inline-edit-wrap:last-child{border-bottom:none;}
+.inline-edit-label{font-size:13px;color:var(--ink2);flex-shrink:0;margin-right:8px;}
+.inline-edit-val{font-size:13px;font-weight:600;color:var(--ink);text-align:right;word-break:break-word;}
+.inline-edit-hint{font-size:9px;color:var(--purple-t);margin-left:4px;}
+
+/* Save toast */
+.toast{position:fixed;top:16px;right:16px;z-index:500;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 8px 24px -6px rgba(0,0,0,0.25);display:flex;align-items:center;gap:6px;}
+.toast-ok{background:#4c1d95;color:#fff;}
+.toast-err{background:var(--rose);color:#fff;}
+.toast-saving{background:var(--ink);color:#fff;}
+
+@media(max-width:400px){.hdr-name{font-size:19px;}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+firebase.initializeApp({
+  apiKey:"AIzaSyD6coEmXNvWuB_l--qsycLCoakPnuttaCg",
+  authDomain:"lucky-star-card.firebaseapp.com",
+  projectId:"lucky-star-card",
+  storageBucket:"lucky-star-card.firebasestorage.app",
+  messagingSenderId:"284045933604",
+  appId:"1:284045933604:web:2415688329cef279656cb1"
+});
+const db = firebase.firestore();
+const storage = firebase.storage();
+const DOC_REF = db.collection("medcard").doc("luckystar-v1");
+</script>
+<script type="text/babel">
+const {useState,useEffect,useRef,useCallback,useMemo}=React;
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function todayISO(){return new Date().toISOString().slice(0,10);}
+function fmtDate(iso){
+  if(!iso)return"—";
+  const[y,m,d]=iso.split("-");
+  const mo=["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"];
+  return `${parseInt(d)} ${mo[parseInt(m)-1]} ${y}`;
+}
+function fmtDateShort(s){
+  if(!s||s==="—")return"—";
+  const p=s.split(/[.\-\/]/);
+  if(p.length===3&&p[2].length===4)return`${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`;
+  return s;
+}
+function parseDateMs(s){
+  if(!s||s==="—")return 0;
+  const p=s.split(/[.\-\/]/);
+  if(p.length===3){
+    const[a,b,c]=p;
+    if(c&&c.length===4)return new Date(`${c}-${b.padStart(2,"0")}-${a.padStart(2,"0")}`).getTime();
+    if(a&&a.length===4)return new Date(`${a}-${b.padStart(2,"0")}-${c.padStart(2,"0")}`).getTime();
+  }
+  if(/^\d{2}\.\d{4}$/.test(s)){const[m,y]=s.split(".");return new Date(`${y}-${m}-01`).getTime();}
+  if(/^\d{4}$/.test(s))return new Date(`${s}-01-01`).getTime();
+  return 0;
+}
+function daysUntil(isoDate){
+  if(!isoDate)return null;
+  const diff=new Date(isoDate)-new Date(todayISO());
+  return Math.round(diff/(1000*86400));
+}
+function autoStatus(value,refMin,refMax){
+  const v=parseFloat(value),mn=parseFloat(refMin),mx=parseFloat(refMax);
+  if(isNaN(v)||isNaN(mn)||isNaN(mx))return"ok";
+  if(v<mn)return"low";
+  if(v>mx)return((v-mn)/(mx-mn))>1.15?"high":"warn";
+  return"ok";
+}
+
+const SC={
+  ok:{label:"Норма",color:"var(--green)",bg:"var(--green-s)",dot:"var(--green)"},
+  warn:{label:"↑ Погранично",color:"var(--amber)",bg:"var(--amber-s)",dot:"var(--amber)"},
+  high:{label:"↑ Выше нормы",color:"var(--red)",bg:"var(--red-s)",dot:"var(--red)"},
+  low:{label:"↓ Ниже нормы",color:"var(--blue)",bg:"var(--blue-s)",dot:"var(--blue)"},
+};
+
+// ── Default data ──────────────────────────────────────────────────────────────
+const DEFAULT = {
+  dogInfo:{name:"Лаки Стар",breed:"Йоркширский терьер",age:"11",dob:"07.02.2015",
+    owner:"Гармашова Р.С.",clinic:"Вет. клиника Виктория, пр. Мира 35, тел. 23-36-53",
+    microchip:"DKU 1166",color:"CT-T",weight:"3,5 кг",mainPhotoUrl:""},
+  diagnoses:[
+    {id:"d1",date:"09.2025–08.2026",title:"Хронический гепатоз / гепатит",note:"УЗИ 24.09.2025: +5% от нормы, сосудистый рисунок ярко выражен. УЗИ 12.08.2026: +10% от нормы — печень продолжает увеличиваться. АЛТ 93, АСТ 60 (06.2026)."},
+    {id:"d2",date:"09.2025–08.2026",title:"Дисхолия, сладж желчного пузыря ‼️",note:"УЗИ 24.09.2025: сладж 0,35 см. УЗИ 12.08.2026: сладж 1,1 см — вырос в 3 раза! Протоки относительно расширены. Требует коррекции лечения."},
+    {id:"d3",date:"09.2025",title:"Хроническая нагрузка на поджелудочную",note:"α-Амилаза: 1517 (10.2025) → 1067 (06.2026). Снижается."},
+    {id:"d4",date:"02.2026",title:"Возможная гипертрофия левого желудочка",note:"ЭКГ 18.02.2026: зубец R ≥ 2,70 мВ. Синусовая аритмия. Аномальный зубец T. Требуется эхокардиография."},
+    {id:"d5",date:"2025–2026",title:"Электролитный дисбаланс",note:"Снижены Ca, Mg хронически. В 06.2026 также снижены Na (139,4) и K (3,66)."},
+    {id:"d6",date:"06.2026",title:"Гипоальбуминемия",note:"Альбумин: 35 (10.2025) → 29 г/л (06.2026). Вероятно следствие нарушения функции печени."},
+  ],
+  visits:[
+    {id:"v1",date:"24.09.2025",reason:"УЗИ печени — хр. гепатоз, не исключён холангит, не исключён печёночный шунт",doctor:"Зюзин В.В.",clinic:"Вет. клиника Виктория"},
+    {id:"v2",date:"24.09.2025",reason:"УЗИ желчного пузыря — размер 2,45×1,38 см, сладж 0,35 см",doctor:"Зюзин В.В.",clinic:"Вет. клиника Виктория"},
+    {id:"v3",date:"23.10.2025",reason:"ОАК + биохимия. Хр. гепатоз, дисхолия. Вес 3,6 кг",doctor:"Зюзин В.В.",clinic:"Вет. клиника Виктория"},
+    {id:"v4",date:"18.02.2026",reason:"ЭКГ + чистка зубов. Хр. МКР. Вес 3,57 кг",doctor:"Зюзин В.В.",clinic:"Вет. клиника Виктория"},
+    {id:"v5",date:"09.07.2026",reason:"ОАК + биохимия + анализ фрагм. эритроцитов. Вес 3,46 кг",doctor:"Зюзин В.В.",clinic:"Вет. клиника Виктория"},
+    {id:"v6",date:"17.07.2026",reason:"Гормоны щитовидной железы (Т4, ТТГ) — оба в норме",doctor:"Зюзин В.В.",clinic:"Vet Union"},
+    {id:"v7",date:"12.08.2026",reason:"УЗИ печени (+10%) и желчного пузыря — сладж 1,1 см",doctor:"Зюзин В.В.",clinic:"Вет. клиника Виктория"},
+  ],
+  prescriptions:[
+    {id:"p1",date:"23.10.2025",name:"Кладастра",note:"2 р/д, 10 дней",nextDate:""},
+    {id:"p2",date:"23.10.2025",name:"Урсодезоксихолевая кислота",note:"1 р/д на ночь, 30–60 дней",nextDate:""},
+    {id:"p3",date:"23.10.2025",name:"Лактобифид",note:"Натощак, 1 р/д, 10 дней",nextDate:""},
+    {id:"p4",date:"23.10.2025",name:"Веракол",note:"4 капли × 2 р/д после еды, 28 дней",nextDate:""},
+    {id:"p5",date:"23.10.2025",name:"Папаверин (укол)",note:"1 р/д в 19:00, 5–7 дней",nextDate:""},
+    {id:"p6",date:"23.10.2025",name:"Ронколейкин (укол)",note:"1 мл п/к, 1 раз в 3 дня — 5 уколов",nextDate:""},
+    {id:"p7",date:"23.10.2025",name:"Эвитон",note:"По схеме с 15.01.2025 по 15.02.2025",nextDate:""},
+    {id:"p8",date:"23.10.2025",name:"Карнитин",note:"По назначению врача",nextDate:""},
+    {id:"p9",date:"18.02.2026",name:"Мекситар",note:"¼ таб утром, 14–28 дней",nextDate:""},
+    {id:"p10",date:"18.02.2026",name:"Дентавелин",note:"2 р/д, 5–7 дней",nextDate:""},
+    {id:"p11",date:"18.02.2026",name:"Синуксол",note:"1 т/д, 5 дней",nextDate:""},
+    {id:"p12",date:"18.02.2026",name:"Лактобифид",note:"1 т/д утром до еды, 10 дней",nextDate:""},
+    {id:"p13",date:"09.07.2026",name:"Ливет-Нео",note:"0,3 мл × 2 р/д с едой, 14–28 дней",nextDate:""},
+    {id:"p14",date:"09.07.2026",name:"Лиарсин",note:"4 капли × 2 р/д за 30 мин до еды, 28 дней",nextDate:""},
+    {id:"p15",date:"—",name:"⚠️ Эхокардиография",note:"Назначена по результатам ЭКГ 18.02.2026",nextDate:""},
+  ],
+  vaccinations:[
+    {id:"vc1",date:"2015-08-02",name:"Празицид Комплекс / Барс Форте",note:"Обработка от паразитов",nextDate:"",type:"parasite"},
+    {id:"vc2",date:"2023-03-06",name:"Гельмимакс",note:"Дегельминтизация",nextDate:"2024-03-15",type:"parasite"},
+    {id:"vc3",date:"2023-06-01",name:"Бравекто",note:"Клещи/блохи",nextDate:"2023-10-21",type:"parasite"},
+    {id:"vc4",date:"2024-03-23",name:"Бравекто",note:"Клещи/блохи",nextDate:"2024-07-23",type:"parasite"},
+    {id:"vc5",date:"2025-05-14",name:"Мультикан-4",note:"Серия №4, годн. 09.2026",nextDate:"2026-05-14",type:"vaccine"},
+    {id:"vc6",date:"2025-05-14",name:"Рабикс (бешенство)",note:"Серия №3",nextDate:"2026-05-14",type:"vaccine"},
+    {id:"vc7",date:"2026-04-15",name:"Nobivac DHPPi (A789C01)",note:"",nextDate:"2027-04-15",type:"vaccine"},
+    {id:"vc8",date:"2026-04-15",name:"Nobivac Rabies (A750B01)",note:"Exp. 03-2028",nextDate:"2027-04-15",type:"vaccine"},
+    {id:"vc9",date:"2026-04-15",name:"Мильбемакс",note:"Дегельминтизация",nextDate:"2026-10-15",type:"parasite"},
+  ],
+  examinations:[
+    {id:"e1",date:"24.09.2025",type:"УЗИ",label:"УЗИ — сентябрь 2025",results:[
+      {name:"Печень — размер",value:"+5% от нормы",unit:"",status:"warn"},
+      {name:"Печень — сосудистый рисунок",value:"Ярко выражен!",unit:"",status:"high"},
+      {name:"Желчный пузырь — размер",value:"2,45×1,38",unit:"см",status:"ok"},
+      {name:"Сладж",value:"0,35",unit:"см",status:"high"},
+      {name:"Заключение",value:"Хр. гепатоз. Не искл. холангит. Не искл. печ. шунт.",unit:"",status:"high"},
+    ]},
+    {id:"e2",date:"16.10.2025",type:"Анализ",label:"Желчные кислоты — окт 2025",results:[
+      {name:"ЖК натощак",value:1.6,unit:"мкмоль/л",refMin:0,refMax:20,status:"ok"},
+      {name:"ЖК через 2ч после еды",value:13.5,unit:"мкмоль/л",refMin:0,refMax:30,status:"ok"},
+    ]},
+    {id:"e3",date:"23.10.2025",type:"Биохимия",label:"Биохимия — октябрь 2025",results:[
+      {name:"Глюкоза",value:4.7,unit:"mmol/L",refMin:3.33,refMax:6.7,status:"ok"},
+      {name:"Мочевина",value:11.9,unit:"mmol/L",refMin:4,refMax:8,status:"high"},
+      {name:"α-Амилаза",value:1517,unit:"U/L",refMin:300,refMax:950,status:"high"},
+      {name:"Креатинин",value:117,unit:"mkmol/L",refMin:44,refMax:115,status:"warn"},
+      {name:"АЛТ",value:60,unit:"U/L",refMin:6,refMax:70,status:"ok"},
+      {name:"АСТ",value:31,unit:"U/L",refMin:10,refMax:43,status:"ok"},
+      {name:"Кальций",value:2.09,unit:"mmol/L",refMin:2.2,refMax:2.8,status:"low"},
+      {name:"Альбумин",value:35,unit:"g/l",refMin:30,refMax:45,status:"ok"},
+      {name:"Магний",value:0.78,unit:"mmol/L",refMin:0.9,refMax:1.3,status:"low"},
+    ]},
+    {id:"e4",date:"23.10.2025",type:"ОАК",label:"ОАК — октябрь 2025",results:[
+      {name:"Гемоглобин",value:162,unit:"г/л",refMin:120,refMax:170,status:"ok"},
+      {name:"Лейкоциты",value:7.1,unit:"×10⁹/л",refMin:8,refMax:12,status:"low"},
+      {name:"Тромбоциты",value:437,unit:"×10⁹/л",refMin:160,refMax:500,status:"ok"},
+      {name:"Эозинофилы",value:4,unit:"%",refMin:0,refMax:3,status:"warn"},
+      {name:"Лимфоциты",value:18,unit:"%",refMin:21,refMax:40,status:"low"},
+    ]},
+    {id:"e5",date:"18.02.2026",type:"ЭКГ",label:"ЭКГ — февраль 2026",results:[
+      {name:"ЧСС",value:104,unit:"уд/мин",refMin:60,refMax:120,status:"ok"},
+      {name:"Зубец R (отв. II)",value:2.70,unit:"мВ",refMin:0,refMax:2.5,status:"high"},
+      {name:"КВ от R-R",value:26.4,unit:"%",refMin:0,refMax:20,status:"high"},
+      {name:"Заключение",value:"Возможная гипертрофия лев. желудочка. Синусовая аритмия.",unit:"",status:"high"},
+    ]},
+    {id:"e6",date:"25.06.2026",type:"Биохимия",label:"Биохимия — июнь 2026",results:[
+      {name:"Мочевина",value:10.4,unit:"mmol/L",refMin:4,refMax:8,status:"high"},
+      {name:"α-Амилаза",value:1067,unit:"U/L",refMin:300,refMax:950,status:"warn"},
+      {name:"АЛТ",value:93,unit:"U/L",refMin:6,refMax:70,status:"high"},
+      {name:"АСТ",value:60,unit:"U/L",refMin:10,refMax:43,status:"high"},
+      {name:"Кальций",value:2.08,unit:"mmol/L",refMin:2.2,refMax:2.8,status:"low"},
+      {name:"Альбумин",value:29,unit:"g/l",refMin:30,refMax:45,status:"low"},
+      {name:"Натрий",value:139.4,unit:"mmol/L",refMin:145,refMax:153,status:"low"},
+      {name:"Калий",value:3.66,unit:"mmol/L",refMin:4.2,refMax:5.6,status:"low"},
+    ]},
+    {id:"e7",date:"25.06.2026",type:"ОАК",label:"ОАК — июнь 2026",results:[
+      {name:"Гемоглобин",value:147,unit:"г/л",refMin:120,refMax:170,status:"ok"},
+      {name:"Лейкоциты",value:10.6,unit:"×10⁹/л",refMin:8,refMax:12,status:"ok"},
+      {name:"Тромбоциты",value:241,unit:"×10⁹/л",refMin:160,refMax:500,status:"ok"},
+      {name:"Эозинофилы",value:4,unit:"%",refMin:0,refMax:3,status:"warn"},
+    ]},
+    {id:"e8",date:"17.07.2026",type:"Анализ",label:"Щитовидная железа — июль 2026",results:[
+      {name:"Т4 общий",value:28.62,unit:"нмоль/л",refMin:15,refMax:60,status:"ok"},
+      {name:"ТТГ (собаки)",value:0.560,unit:"нг/мл",refMin:0,refMax:1.25,status:"ok"},
+    ]},
+    {id:"e9",date:"12.08.2026",type:"УЗИ",label:"УЗИ — август 2026",results:[
+      {name:"Печень — размер",value:"+10% от нормы",unit:"",status:"high"},
+      {name:"Печень — сосудистый рисунок",value:"Относ. выражен",unit:"",status:"warn"},
+      {name:"Желчный пузырь — размер",value:"1,92×1,67",unit:"см",status:"ok"},
+      {name:"Сладж ‼️",value:"1,1",unit:"см",status:"high"},
+      {name:"Заключение",value:"Хр. гепатоз. Динамика — см. УЗИ 09.2025.",unit:"",status:"warn"},
+    ]},
+  ],
+  documents:[
+    {id:"doc1",date:"24.09.2025",title:"УЗИ печени",category:"УЗИ",url:"",note:"Вет. клиника Виктория"},
+    {id:"doc2",date:"24.09.2025",title:"УЗИ желчного пузыря",category:"УЗИ",url:"",note:"Вет. клиника Виктория"},
+    {id:"doc3",date:"23.10.2025",title:"Биохимия + ОАК октябрь 2025",category:"Анализы",url:"",note:""},
+    {id:"doc4",date:"18.02.2026",title:"ЭКГ",category:"ЭКГ",url:"",note:""},
+    {id:"doc5",date:"25.06.2026",title:"Биохимия + ОАК июнь 2026",category:"Анализы",url:"",note:""},
+    {id:"doc6",date:"17.07.2026",title:"Гормоны щитовидной",category:"Анализы",url:"",note:"Vet Union"},
+    {id:"doc7",date:"12.08.2026",title:"УЗИ печени август 2026",category:"УЗИ",url:"",note:""},
+    {id:"doc8",date:"12.08.2026",title:"УЗИ желчного пузыря август 2026",category:"УЗИ",url:"",note:"Сладж 1,1 см"},
+  ],
+  photos:[],
+  history:[
+    {id:"h0",ts:new Date().toISOString(),what:"Карта создана",section:"system"},
+  ],
+};
+
+// ── useDB hook ─────────────────────────────────────────────────────────────────
+function useDB(){
+  const[data,setData]=useState(null);
+  const[loading,setLoading]=useState(true);
+  const[saveState,setSaveState]=useState("idle"); // idle | saving | saved | error | offline
+  const latest=useRef(null);
+
+  const persist=useCallback((next,histEntry)=>{
+    const payload={...next};
+    if(histEntry){
+      payload.history=[{id:uid(),ts:new Date().toISOString(),...histEntry},...(next.history||[])].slice(0,50);
+    }
+    latest.current=payload;
+    setData(payload);
+    setSaveState("saving");
+    // also save to localStorage as offline cache
+    try{localStorage.setItem("ls-cache-v1",JSON.stringify(payload));}catch(_){}
+    DOC_REF.set(payload)
+      .then(()=>{setSaveState("saved");setTimeout(()=>setSaveState(s=>s==="saved"?"idle":s),2000);})
+      .catch(()=>{setSaveState("error");setTimeout(()=>setSaveState(s=>s==="error"?"offline":s),4000);});
+  },[]);
+
+  useEffect(()=>{
+    const unsub=DOC_REF.onSnapshot(snap=>{
+      if(snap.exists){
+        const d=snap.data();
+        latest.current=d;
+        setData(d);
+      } else {
+        // first load — use defaults
+        const d={...DEFAULT};
+        latest.current=d;
+        setData(d);
+        DOC_REF.set(d).catch(console.error);
+      }
+      setLoading(false);
+    },err=>{
+      console.error("Firestore error:",err);
+      setSaveState("offline");
+      // try cache
+      try{
+        const cached=localStorage.getItem("ls-cache-v1");
+        if(cached){const d=JSON.parse(cached);latest.current=d;setData(d);}
+        else{latest.current=DEFAULT;setData(DEFAULT);}
+      }catch(_){latest.current=DEFAULT;setData(DEFAULT);}
+      setLoading(false);
+    });
+    return()=>unsub();
+  },[]);
+
+  const exportJSON=useCallback(()=>{
+    if(!latest.current)return;
+    const blob=new Blob([JSON.stringify(latest.current,null,2)],{type:"application/json"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=`lucky-star-backup-${todayISO()}.json`;
+    a.click();
+  },[]);
+
+  const importJSON=useCallback((file)=>{
+    const r=new FileReader();
+    r.onload=e=>{try{const d=JSON.parse(e.target.result);persist(d,{what:"Импорт резервной копии",section:"system"});}catch(_){alert("Ошибка чтения файла");}};
+    r.readAsText(file);
+  },[persist]);
+
+  return{data,loading,persist,saveState,exportJSON,importJSON};
+}
+
+// ── Notification logic ────────────────────────────────────────────────────────
+function collectNotifications(data){
+  if(!data)return[];
+  const today=todayISO();
+  const future=new Date();future.setDate(future.getDate()+14);
+  const in14=future.toISOString().slice(0,10);
+  const items=[];
+  (data.vaccinations||[]).forEach(v=>{
+    if(!v.nextDate)return;
+    if(v.nextDate<=in14){
+      const d=daysUntil(v.nextDate);
+      items.push({id:v.id,icon:v.type==="vaccine"?"💉":"🧴",title:v.name,date:v.nextDate,days:d,
+        bucket:v.nextDate<today?"overdue":v.nextDate===today?"today":"soon"});
+    }
+  });
+  (data.prescriptions||[]).forEach(p=>{
+    if(!p.nextDate)return;
+    if(p.nextDate<=in14){
+      const d=daysUntil(p.nextDate);
+      items.push({id:p.id,icon:"💊",title:p.name,date:p.nextDate,days:d,
+        bucket:p.nextDate<today?"overdue":p.nextDate===today?"today":"soon"});
+    }
+  });
+  return items.sort((a,b)=>a.date.localeCompare(b.date));
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+function Toast({state}){
+  if(state==="idle")return null;
+  const cfg={
+    saving:{cls:"toast toast-saving",text:"☁️ Сохраняется…"},
+    saved:{cls:"toast toast-ok",text:"✓ Сохранено в облако"},
+    error:{cls:"toast toast-err",text:"⚠️ Ошибка сохранения"},
+    offline:{cls:"toast toast-err",text:"📴 Офлайн — данные в кэше"},
+  };
+  const c=cfg[state];if(!c)return null;
+  return <div className={c.cls}>{c.text}</div>;
+}
+
+function Badge({status,children}){
+  const c=SC[status]||SC.ok;
+  return <span className="badge" style={{background:c.bg,color:c.color}}>
+    <span style={{width:5,height:5,borderRadius:"50%",background:c.dot,display:"inline-block"}}/>
+    {children||c.label}
+  </span>;
+}
+
+function LabRow({row}){
+  const isText=isNaN(parseFloat(row.value));
+  const pct=isText?50:Math.min(100,Math.max(0,((parseFloat(row.value)-(row.refMin||0))/((row.refMax||1)-(row.refMin||0)))*100));
+  const c=SC[row.status]||SC.ok;
+  return <div className="lab-row">
+    <div className="lab-row-top">
+      <span className="lab-name">{row.name}</span>
+      <div className="lab-val-wrap">
+        <span className="lab-val" style={{color:c.color}}>{row.value}</span>
+        {row.unit&&<span className="lab-unit">{row.unit}</span>}
+        <Badge status={row.status}/>
+      </div>
+    </div>
+    {!isText&&row.refMax&&<div className="lab-bar-wrap">
+      <span className="lab-bar-ref">{row.refMin}</span>
+      <div className="lab-bar"><div className="lab-bar-fill" style={{width:`${pct}%`,background:c.dot}}/></div>
+      <span className="lab-bar-ref" style={{textAlign:"right"}}>{row.refMax}</span>
+    </div>}
+  </div>;
+}
+
+function InlineField({label,value,onChange}){
+  const[edit,setEdit]=useState(false);
+  const[v,setV]=useState(value);
+  if(edit)return <div style={{padding:"8px 0",borderBottom:"1px solid var(--line2)"}}>
+    <div className="inp-label">{label}</div>
+    <input className="inp" value={v} onChange={e=>setV(e.target.value)}/>
+    <div style={{display:"flex",gap:8,marginTop:6}}>
+      <button className="btn btn-primary" style={{padding:"8px 14px",fontSize:13}} onClick={()=>{onChange(v);setEdit(false);}}>Сохранить</button>
+      <button className="btn btn-ghost" style={{padding:"8px 14px",fontSize:13}} onClick={()=>{setV(value);setEdit(false);}}>Отмена</button>
+    </div>
+  </div>;
+  return <div className="inline-edit-wrap" onClick={()=>setEdit(true)}>
+    <span className="inline-edit-label">{label}</span>
+    <span className="inline-edit-val">{value||<span style={{color:"var(--ink3)",fontStyle:"italic"}}>—</span>}
+      <span className="inline-edit-hint">✏</span></span>
+  </div>;
+}
+
+function Sheet({title,onClose,children}){
+  return <div className="sheet-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+    <div className="sheet">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div className="sheet-title">{title}</div>
+        <button onClick={onClose} style={{border:"none",background:"none",fontSize:22,cursor:"pointer",color:"var(--ink3)"}}>×</button>
+      </div>
+      {children}
+    </div>
+  </div>;
+}
+
+function RecordItem({item,fields,accent,onSave,onDelete,renderBody}){
+  const[editing,setEditing]=useState(false);
+  const[vals,setVals]=useState(()=>Object.fromEntries(fields.map(f=>[f.key,item[f.key]||""])));
+  useEffect(()=>setVals(Object.fromEntries(fields.map(f=>[f.key,item[f.key]||""]))),[item]);
+  const set=(k,v)=>setVals(p=>({...p,[k]:v}));
+
+  const nextDays=item.nextDate?daysUntil(item.nextDate):null;
+  const nextCls=nextDays===null?"":(nextDays<0?"overdue":nextDays<=3?"soon":"");
+
+  if(editing)return <div className="rec" style={{borderLeft:`3px solid ${accent}`}}>
+    {fields.map(f=><div key={f.key} className="inp-group">
+      <label className="inp-label">{f.label}</label>
+      {f.multiline
+        ?<textarea className="inp textarea" value={vals[f.key]} onChange={e=>set(f.key,e.target.value)}/>
+        :<input className="inp" type={f.type||"text"} value={vals[f.key]} onChange={e=>set(f.key,e.target.value)}/>}
+    </div>)}
+    <div className="sheet-btns">
+      <button className="btn btn-primary" onClick={()=>{onSave(vals);setEditing(false);}}>Сохранить</button>
+      <button className="btn btn-ghost" onClick={()=>setEditing(false)}>Отмена</button>
+    </div>
+  </div>;
+
+  return <div className="rec" style={{borderLeft:`3px solid ${accent}`}}>
+    {renderBody(item)}
+    {item.nextDate&&<div className={`rec-next ${nextCls}`}>
+      {nextDays<0?`⚠️ Просрочено на ${Math.abs(nextDays)} дн.`:nextDays===0?"📅 Сегодня":`📅 Через ${nextDays} дн. — ${fmtDate(item.nextDate)}`}
+    </div>}
+    <div className="rec-actions">
+      <button className="rec-btn edit" onClick={()=>setEditing(true)}>✏️ Изменить</button>
+      <button className="rec-btn del" onClick={onDelete}>✕ Удалить</button>
+    </div>
+  </div>;
+}
+
+// Upload photo to Firebase Storage
+function usePhotoUpload(){
+  const[progress,setProgress]=useState(null);
+  const[error,setError]=useState(null);
+  const upload=useCallback((file,folder="photos")=>{
+    return new Promise((resolve,reject)=>{
+      setError(null);
+      // Check file size — max 5MB
+      if(file.size>5*1024*1024){
+        const err="Файл слишком большой (макс. 5 МБ)";
+        setError(err);reject(new Error(err));return;
+      }
+      const safeName=file.name.replace(/[^\w.\-]+/g,"_").replace(/\s+/g,"_");
+      const path=`${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}-${safeName}`;
+      try{
+        const ref=storage.ref(path);
+        const task=ref.put(file,{
+          contentType:file.type||"application/octet-stream",
+          customMetadata:{uploadedAt:new Date().toISOString(),originalName:file.name}
+        });
+        task.on("state_changed",
+          snap=>{
+            const pct=Math.round((snap.bytesTransferred/snap.totalBytes)*100);
+            setProgress(pct);
+          },
+          err=>{
+            setProgress(null);
+            let msg="Ошибка загрузки";
+            if(err.code==="storage/unauthorized")msg="Нет доступа — проверьте правила Storage";
+            else if(err.code==="storage/canceled")msg="Загрузка отменена";
+            else if(err.code==="storage/unknown")msg="Сетевая ошибка — проверьте интернет";
+            else msg=err.message||err.code||"Неизвестная ошибка";
+            setError(msg);
+            reject(new Error(msg));
+          },
+          ()=>{
+            setProgress(null);
+            task.snapshot.ref.getDownloadURL()
+              .then(url=>{setError(null);resolve(url);})
+              .catch(e=>{setError("Файл загружен, но не удалось получить ссылку");reject(e);});
+          }
+        );
+      }catch(e){
+        setProgress(null);
+        const msg="Ошибка инициализации загрузки: "+e.message;
+        setError(msg);reject(new Error(msg));
+      }
+    });
+  },[]);
+  return{upload,progress,error};
+}
+
+// ── Tab: Overview ─────────────────────────────────────────────────────────────
+function TabOverview({data,persist}){
+  const setDog=(k,v)=>{
+    const nd={...data,dogInfo:{...data.dogInfo,[k]:v}};
+    persist(nd,{what:`Изменено поле «${k}»`,section:"profile"});
+  };
+  const {upload,progress,error}=usePhotoUpload();
+  const fileRef=useRef();
+
+  const uploadAvatar=async(e)=>{
+    const file=e.target.files[0];if(!file)return;
+    try{
+      const url=await upload(file,"avatar");
+      const nd={...data,dogInfo:{...data.dogInfo,mainPhotoUrl:url}};
+      persist(nd,{what:"Обновлено фото профиля",section:"profile"});
+    }catch(err){alert("Ошибка загрузки фото:\n"+err.message);}
+  };
+
+  const di=data.dogInfo||{};
+  return <div className="section">
+    <div style={{display:"flex",gap:14,alignItems:"center",marginBottom:20}}>
+      <div style={{position:"relative"}}>
+        <div className="hdr-avatar" style={{width:72,height:72,fontSize:36,borderRadius:18,border:"3px solid var(--purple-t)",cursor:"pointer"}} onClick={()=>fileRef.current.click()}>
+          {di.mainPhotoUrl?<img src={di.mainPhotoUrl} alt=""/>:"🐕"}
+        </div>
+        <div style={{position:"absolute",bottom:-4,right:-4,background:"var(--purple)",color:"#fff",borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer"}} onClick={()=>fileRef.current.click()}>+</div>
+        <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={uploadAvatar}/>
+      </div>
+      <div>
+        <div style={{fontFamily:"Fraunces,serif",fontWeight:700,fontSize:20,color:"var(--ink)"}}>{di.name}</div>
+        <div style={{fontSize:12,color:"var(--ink2)",marginTop:2}}>{di.breed}</div>
+        {progress!==null&&<div className="upload-progress" style={{marginTop:6,width:100}}><div className="upload-progress-fill" style={{width:`${progress}%`}}/></div>}
+      </div>
+    </div>
+
+    <div className="card card-stripe" style={{"--stripe":"var(--purple)"}}>
+      <div className="card-header"><div className="card-title">🐾 Основная информация</div></div>
+      <div className="card-body">
+        {[["name","Кличка"],["breed","Порода"],["age","Возраст (лет)"],["dob","Дата рождения"],["weight","Вес"],["color","Окрас"],["microchip","Микрочип"],["owner","Владелец"],["clinic","Клиника"]].map(([k,l])=>
+          <InlineField key={k} label={l} value={di[k]||""} onChange={v=>setDog(k,v)}/>)}
+      </div>
+    </div>
+
+    <div className="card card-stripe" style={{"--stripe":"var(--rose)"}}>
+      <div className="card-header"><div className="card-title">🚨 Активные проблемы</div></div>
+      <div className="card-body">
+        {(data.diagnoses||[]).slice(0,4).map(d=><div key={d.id} style={{padding:"8px 0",borderBottom:"1px solid var(--line2)"}}>
+          <div style={{fontWeight:600,fontSize:13,color:"var(--ink)"}}>{d.title}</div>
+          <div style={{fontSize:11,color:"var(--ink2)",marginTop:2}}>{d.note}</div>
+        </div>)}
+      </div>
+    </div>
+  </div>;
+}
+
+// ── Tab: Diagnoses ────────────────────────────────────────────────────────────
+function TabDiagnoses({data,persist}){
+  const[adding,setAdding]=useState(false);
+  const[form,setForm]=useState({date:"",title:"",note:""});
+  const fields=[{key:"date",label:"Дата"},{key:"title",label:"Диагноз"},{key:"note",label:"Примечание",multiline:true}];
+
+  const save=(id,vals)=>{
+    const nd={...data,diagnoses:data.diagnoses.map(d=>d.id===id?{...d,...vals}:d)};
+    persist(nd,{what:`Обновлён диагноз: ${vals.title}`,section:"diagnoses"});
+  };
+  const del=(id)=>{
+    if(!confirm("Удалить диагноз?"))return;
+    const nd={...data,diagnoses:data.diagnoses.filter(d=>d.id!==id)};
+    persist(nd,{what:"Удалён диагноз",section:"diagnoses"});
+  };
+  const addNew=()=>{
+    if(!form.title)return;
+    const nd={...data,diagnoses:[{id:uid(),...form},...data.diagnoses]};
+    persist(nd,{what:`Добавлен диагноз: ${form.title}`,section:"diagnoses"});
+    setAdding(false);setForm({date:"",title:"",note:""});
+  };
+
+  return <div className="section">
+    <div className="add-row"><button className="add-btn" onClick={()=>setAdding(true)}>+ Добавить диагноз</button></div>
+    {adding&&<Sheet title="Новый диагноз" onClose={()=>setAdding(false)}>
+      {fields.map(f=><div key={f.key} className="inp-group">
+        <label className="inp-label">{f.label}</label>
+        {f.multiline?<textarea className="inp textarea" value={form[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))}/>
+          :<input className="inp" value={form[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))}/>}
+      </div>)}
+      <div className="sheet-btns"><button className="btn btn-primary" onClick={addNew}>Добавить</button><button className="btn btn-ghost" onClick={()=>setAdding(false)}>Отмена</button></div>
+    </Sheet>}
+    {(data.diagnoses||[]).map(d=>(
+      <RecordItem key={d.id} item={d} fields={fields} accent="var(--rose)" onSave={v=>save(d.id,v)} onDelete={()=>del(d.id)}
+        renderBody={item=><>
+          <div className="rec-top">
+            <div className="rec-title">{item.title}</div>
+            <div className="rec-date">{item.date}</div>
+          </div>
+          <div className="rec-note">{item.note}</div>
+        </>}/>
+    ))}
+  </div>;
+}
+
+// ── Tab: Exams ────────────────────────────────────────────────────────────────
+function TabExams({data,persist}){
+  const[open,setOpen]=useState(null);
+  const[adding,setAdding]=useState(false);
+  const[addingRow,setAddingRow]=useState(false);
+  const[form,setForm]=useState({label:"",date:"",type:"Биохимия"});
+  const[rowForm,setRowForm]=useState({name:"",value:"",unit:"",refMin:"",refMax:""});
+  const[filter,setFilter]=useState("Все");
+
+  const types=["Все","Биохимия","ОАК","УЗИ","ЭКГ","Анализ"];
+  const exams=data.examinations||[];
+  const filtered=filter==="Все"?exams:exams.filter(e=>e.type===filter);
+  const sorted=[...filtered].sort((a,b)=>parseDateMs(b.date)-parseDateMs(a.date));
+  const openExam=open?exams.find(e=>e.id===open):null;
+
+  const addExam=()=>{
+    if(!form.label)return;
+    const nd={...data,examinations:[{id:uid(),...form,results:[]},...exams]};
+    persist(nd,{what:`Добавлено обследование: ${form.label}`,section:"exams"});
+    setAdding(false);setForm({label:"",date:"",type:"Биохимия"});
+  };
+  const delExam=(id)=>{
+    if(!confirm("Удалить обследование?"))return;
+    const nd={...data,examinations:exams.filter(e=>e.id!==id)};
+    persist(nd,{what:"Удалено обследование",section:"exams"});
+    if(open===id)setOpen(null);
+  };
+  const addRow=()=>{
+    if(!rowForm.name)return;
+    const status=autoStatus(rowForm.value,rowForm.refMin,rowForm.refMax);
+    const row={name:rowForm.name,value:parseFloat(rowForm.value)||rowForm.value,unit:rowForm.unit,
+      refMin:parseFloat(rowForm.refMin)||0,refMax:parseFloat(rowForm.refMax)||0,status};
+    const nd={...data,examinations:exams.map(e=>e.id!==open?e:{...e,results:[...e.results,row]})};
+    persist(nd,{what:`Добавлен показатель: ${rowForm.name}`,section:"exams"});
+    setAddingRow(false);setRowForm({name:"",value:"",unit:"",refMin:"",refMax:""});
+  };
+  const delRow=(examId,idx)=>{
+    const nd={...data,examinations:exams.map(e=>e.id!==examId?e:{...e,results:e.results.filter((_,i)=>i!==idx)})};
+    persist(nd,{what:"Удалён показатель",section:"exams"});
+  };
+
+  if(openExam)return <div className="section">
+    <button onClick={()=>setOpen(null)} style={{border:"none",background:"none",color:"var(--purple)",fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:4,marginBottom:14,padding:0}}>‹ Все обследования</button>
+    <div className="card">
+      <div className="card-header">
+        <div className="card-title">{openExam.label}</div>
+        <button onClick={()=>delExam(open)} style={{border:"none",background:"none",color:"var(--ink3)",cursor:"pointer",fontSize:16}}>🗑</button>
+      </div>
+      <div className="card-body" style={{paddingTop:4}}>
+        <div style={{fontSize:12,color:"var(--ink3)",marginBottom:8,fontFamily:"JetBrains Mono,monospace"}}>{openExam.type} · {openExam.date}</div>
+        {openExam.results.map((r,i)=><div key={i} style={{position:"relative"}}>
+          <LabRow row={r}/>
+          <button onClick={()=>delRow(open,i)} style={{position:"absolute",right:0,top:10,border:"none",background:"none",color:"var(--ink3)",cursor:"pointer",fontSize:12}}>✕</button>
+        </div>)}
+        {openExam.results.length===0&&<div style={{color:"var(--ink3)",fontSize:13,padding:"8px 0"}}>Нет показателей</div>}
+      </div>
+    </div>
+    {addingRow?<Sheet title="Добавить показатель" onClose={()=>setAddingRow(false)}>
+      {[["name","Показатель"],["value","Значение"],["unit","Единица"],["refMin","Норма от"],["refMax","Норма до"]].map(([k,l])=>
+        <div key={k} className="inp-group"><label className="inp-label">{l}</label>
+          <input className="inp" value={rowForm[k]} onChange={e=>setRowForm(p=>({...p,[k]:e.target.value}))}/></div>)}
+      <div className="sheet-btns"><button className="btn btn-primary" onClick={addRow}>Добавить</button><button className="btn btn-ghost" onClick={()=>setAddingRow(false)}>Отмена</button></div>
+    </Sheet>
+    :<div className="add-row"><button className="add-btn" onClick={()=>setAddingRow(true)}>+ Добавить показатель</button></div>}
+  </div>;
+
+  return <div className="section">
+    <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:12,paddingBottom:2}}>
+      {types.map(t=><button key={t} onClick={()=>setFilter(t)}
+        style={{border:"none",borderRadius:20,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",background:filter===t?"var(--purple)":"var(--line2)",color:filter===t?"#fff":"var(--ink2)"}}>
+        {t}
+      </button>)}
+    </div>
+    <div className="add-row"><button className="add-btn" onClick={()=>setAdding(true)}>+ Добавить обследование</button></div>
+    {adding&&<Sheet title="Новое обследование" onClose={()=>setAdding(false)}>
+      {[["label","Название"],["date","Дата"],["type","Тип"]].map(([k,l])=>
+        <div key={k} className="inp-group"><label className="inp-label">{l}</label>
+          <input className="inp" value={form[k]} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}/></div>)}
+      <div className="sheet-btns"><button className="btn btn-primary" onClick={addExam}>Добавить</button><button className="btn btn-ghost" onClick={()=>setAdding(false)}>Отмена</button></div>
+    </Sheet>}
+    {sorted.map(e=>{
+      const bad=(e.results||[]).filter(r=>r.status&&r.status!=="ok").length;
+      return <div key={e.id} className="card card-stripe" style={{"--stripe":"var(--purple)"}} onClick={()=>setOpen(e.id)}>
+        <div className="card-header" style={{cursor:"pointer",paddingBottom:10}}>
+          <div>
+            <div className="card-title">{e.label}</div>
+            <div style={{fontSize:12,color:"var(--ink3)",marginTop:2,fontFamily:"JetBrains Mono,monospace"}}>{e.type} · {e.date}</div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {bad>0&&<Badge status="high">{bad} откл.</Badge>}
+            <span style={{color:"var(--ink3)",fontSize:18}}>›</span>
+          </div>
+        </div>
+      </div>;
+    })}
+  </div>;
+}
+
+// ── Tab: Visits ───────────────────────────────────────────────────────────────
+function TabVisits({data,persist}){
+  const[adding,setAdding]=useState(false);
+  const[form,setForm]=useState({date:"",reason:"",doctor:"Зюзин В.В.",clinic:"Вет. клиника Виктория"});
+  const fields=[{key:"date",label:"Дата"},{key:"reason",label:"Причина / описание",multiline:true},{key:"doctor",label:"Врач"},{key:"clinic",label:"Клиника"}];
+  const visits=[...(data.visits||[])].sort((a,b)=>parseDateMs(b.date)-parseDateMs(a.date));
+
+  const save=(id,vals)=>{
+    const nd={...data,visits:data.visits.map(v=>v.id===id?{...v,...vals}:v)};
+    persist(nd,{what:`Обновлён визит: ${vals.date}`,section:"visits"});
+  };
+  const del=(id)=>{
+    if(!confirm("Удалить запись о визите?"))return;
+    const nd={...data,visits:data.visits.filter(v=>v.id!==id)};
+    persist(nd,{what:"Удалён визит",section:"visits"});
+  };
+  const addNew=()=>{
+    if(!form.date)return;
+    const nd={...data,visits:[{id:uid(),...form},...data.visits]};
+    persist(nd,{what:`Добавлен визит: ${form.date}`,section:"visits"});
+    setAdding(false);setForm({date:"",reason:"",doctor:"Зюзин В.В.",clinic:"Вет. клиника Виктория"});
+  };
+
+  return <div className="section">
+    <div className="add-row"><button className="add-btn" onClick={()=>setAdding(true)}>+ Добавить визит</button></div>
+    {adding&&<Sheet title="Новый визит" onClose={()=>setAdding(false)}>
+      {fields.map(f=><div key={f.key} className="inp-group">
+        <label className="inp-label">{f.label}</label>
+        {f.multiline?<textarea className="inp textarea" value={form[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))}/>
+          :<input className="inp" value={form[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))}/>}
+      </div>)}
+      <div className="sheet-btns"><button className="btn btn-primary" onClick={addNew}>Добавить</button><button className="btn btn-ghost" onClick={()=>setAdding(false)}>Отмена</button></div>
+    </Sheet>}
+    {visits.map(v=>(
+      <RecordItem key={v.id} item={v} fields={fields} accent="var(--teal)" onSave={vals=>save(v.id,vals)} onDelete={()=>del(v.id)}
+        renderBody={item=><>
+          <div className="rec-top">
+            <div className="rec-title">{item.date}</div>
+            <div className="rec-date">{item.clinic}</div>
+          </div>
+          <div className="rec-note">{item.reason}</div>
+          <div style={{fontSize:12,color:"var(--ink3)",marginTop:4}}>Врач: {item.doctor}</div>
+        </>}/>
+    ))}
+  </div>;
+}
+
+// ── Tab: Vaccines ─────────────────────────────────────────────────────────────
+function TabVaccinations({data,persist}){
+  const[adding,setAdding]=useState(false);
+  const[filter,setFilter]=useState("Все");
+  const[form,setForm]=useState({date:"",name:"",note:"",nextDate:"",type:"vaccine"});
+  const fields=[
+    {key:"date",label:"Дата (ГГГГ-ММ-ДД)",type:"date"},
+    {key:"name",label:"Название"},
+    {key:"note",label:"Примечание"},
+    {key:"nextDate",label:"Следующая дата (ГГГГ-ММ-ДД)",type:"date"},
+    {key:"type",label:"Тип (vaccine / parasite)"},
+  ];
+  const vacc=[...(data.vaccinations||[])].sort((a,b)=>b.date.localeCompare(a.date));
+  const filtered=filter==="Все"?vacc:filter==="💉 Вакцины"?vacc.filter(v=>v.type==="vaccine"):vacc.filter(v=>v.type==="parasite");
+
+  const save=(id,vals)=>{
+    const nd={...data,vaccinations:data.vaccinations.map(v=>v.id===id?{...v,...vals}:v)};
+    persist(nd,{what:`Обновлена запись: ${vals.name}`,section:"vaccinations"});
+  };
+  const del=(id)=>{
+    if(!confirm("Удалить запись?"))return;
+    const nd={...data,vaccinations:data.vaccinations.filter(v=>v.id!==id)};
+    persist(nd,{what:"Удалена вакцинация/обработка",section:"vaccinations"});
+  };
+  const addNew=()=>{
+    if(!form.name)return;
+    const nd={...data,vaccinations:[{id:uid(),...form},...data.vaccinations]};
+    persist(nd,{what:`Добавлена запись: ${form.name}`,section:"vaccinations"});
+    setAdding(false);setForm({date:"",name:"",note:"",nextDate:"",type:"vaccine"});
+  };
+
+  return <div className="section">
+    <div style={{display:"flex",gap:6,marginBottom:12}}>
+      {["Все","💉 Вакцины","🧴 Обработки"].map(f=><button key={f} onClick={()=>setFilter(f)}
+        style={{border:"none",borderRadius:20,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",background:filter===f?"var(--purple)":"var(--line2)",color:filter===f?"#fff":"var(--ink2)"}}>
+        {f}
+      </button>)}
+    </div>
+    <div className="add-row"><button className="add-btn" onClick={()=>setAdding(true)}>+ Добавить</button></div>
+    {adding&&<Sheet title="Новая запись" onClose={()=>setAdding(false)}>
+      {fields.map(f=><div key={f.key} className="inp-group">
+        <label className="inp-label">{f.label}</label>
+        <input className="inp" type={f.type||"text"} value={form[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))}/>
+      </div>)}
+      <div className="sheet-btns"><button className="btn btn-primary" onClick={addNew}>Добавить</button><button className="btn btn-ghost" onClick={()=>setAdding(false)}>Отмена</button></div>
+    </Sheet>}
+    {filtered.map(v=>(
+      <RecordItem key={v.id} item={v} fields={fields} accent={v.type==="vaccine"?"var(--purple)":"var(--teal)"} onSave={vals=>save(v.id,vals)} onDelete={()=>del(v.id)}
+        renderBody={item=><>
+          <div className="rec-top">
+            <div className="rec-title">{item.type==="vaccine"?"💉":"🧴"} {item.name}</div>
+            <div className="rec-date">{item.date}</div>
+          </div>
+          {item.note&&<div className="rec-note">{item.note}</div>}
+        </>}/>
+    ))}
+  </div>;
+}
+
+// ── Tab: Prescriptions ────────────────────────────────────────────────────────
+function TabPrescriptions({data,persist}){
+  const[adding,setAdding]=useState(false);
+  const[form,setForm]=useState({date:"",name:"",note:"",nextDate:""});
+  const fields=[{key:"date",label:"Дата"},{key:"name",label:"Препарат"},{key:"note",label:"Схема / дозировка",multiline:true},{key:"nextDate",label:"Следующий приём (ГГГГ-ММ-ДД)",type:"date"}];
+
+  const byDate=useMemo(()=>{
+    const pres=[...(data.prescriptions||[])].sort((a,b)=>parseDateMs(b.date)-parseDateMs(a.date));
+    const map={};
+    pres.forEach(p=>{if(!map[p.date])map[p.date]=[];map[p.date].push(p);});
+    return Object.entries(map);
+  },[data.prescriptions]);
+
+  const save=(id,vals)=>{
+    const nd={...data,prescriptions:data.prescriptions.map(p=>p.id===id?{...p,...vals}:p)};
+    persist(nd,{what:`Обновлено назначение: ${vals.name}`,section:"prescriptions"});
+  };
+  const del=(id)=>{
+    if(!confirm("Удалить назначение?"))return;
+    const nd={...data,prescriptions:data.prescriptions.filter(p=>p.id!==id)};
+    persist(nd,{what:"Удалено назначение",section:"prescriptions"});
+  };
+  const addNew=()=>{
+    if(!form.name)return;
+    const nd={...data,prescriptions:[{id:uid(),...form},...data.prescriptions]};
+    persist(nd,{what:`Добавлено назначение: ${form.name}`,section:"prescriptions"});
+    setAdding(false);setForm({date:"",name:"",note:"",nextDate:""});
+  };
+
+  return <div className="section">
+    <div className="add-row"><button className="add-btn" onClick={()=>setAdding(true)}>+ Добавить назначение</button></div>
+    {adding&&<Sheet title="Новое назначение" onClose={()=>setAdding(false)}>
+      {fields.map(f=><div key={f.key} className="inp-group">
+        <label className="inp-label">{f.label}</label>
+        {f.multiline?<textarea className="inp textarea" value={form[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))}/>
+          :<input className="inp" type={f.type||"text"} value={form[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))}/>}
+      </div>)}
+      <div className="sheet-btns"><button className="btn btn-primary" onClick={addNew}>Добавить</button><button className="btn btn-ghost" onClick={()=>setAdding(false)}>Отмена</button></div>
+    </Sheet>}
+    {byDate.map(([date,items])=>(
+      <div key={date}>
+        <div style={{fontSize:11,fontWeight:700,color:"var(--ink3)",textTransform:"uppercase",letterSpacing:"0.05em",margin:"12px 0 6px"}}>📅 {date}</div>
+        {items.map(p=>(
+          <RecordItem key={p.id} item={p} fields={fields} accent={p.name.includes("⚠️")?"var(--rose)":"var(--green)"} onSave={vals=>save(p.id,vals)} onDelete={()=>del(p.id)}
+            renderBody={item=><>
+              <div className="rec-top">
+                <div className="rec-title" style={{color:item.name.includes("⚠️")?"var(--rose)":undefined}}>{item.name}</div>
+              </div>
+              <div className="rec-note">{item.note}</div>
+            </>}/>
+        ))}
+      </div>
+    ))}
+  </div>;
+}
+
+// ── Tab: Docs & Photos ────────────────────────────────────────────────────────
+function TabDocs({data,persist}){
+  const[subtab,setSubtab]=useState("photos");
+  const[adding,setAdding]=useState(false);
+  const[form,setForm]=useState({date:"",title:"",category:"Анализы",url:"",note:""});
+  const{upload,progress,error:uploadError}=usePhotoUpload();
+  const fileRef=useRef();
+  const docFileRef=useRef();
+
+  const uploadPhoto=async(e)=>{
+    const files=Array.from(e.target.files);
+    for(const file of files){
+      try{
+        const url=await upload(file,"photos");
+        const nd={...data,photos:[...(data.photos||[]),{id:uid(),url,name:file.name,date:todayISO()}]};
+        persist(nd,{what:`Загружено фото: ${file.name}`,section:"photos"});
+      }catch(err){alert("Ошибка загрузки: "+file.name+"\n"+err.message);}
+    }
+  };
+  const delPhoto=(id)=>{
+    if(!confirm("Удалить фото?"))return;
+    const nd={...data,photos:(data.photos||[]).filter(p=>p.id!==id)};
+    persist(nd,{what:"Удалено фото",section:"photos"});
+  };
+  const addDoc=()=>{
+    if(!form.title)return;
+    const nd={...data,documents:[{id:uid(),...form},...(data.documents||[])]};
+    persist(nd,{what:`Добавлен документ: ${form.title}`,section:"documents"});
+    setAdding(false);setForm({date:"",title:"",category:"Анализы",url:"",note:""});
+  };
+  const delDoc=(id)=>{
+    if(!confirm("Удалить документ?"))return;
+    const nd={...data,documents:(data.documents||[]).filter(d=>d.id!==id)};
+    persist(nd,{what:"Удалён документ",section:"documents"});
+  };
+  const uploadDocFile=async(e)=>{
+    const file=e.target.files[0];if(!file)return;
+    try{
+      const url=await upload(file,"documents");
+      const nd={...data,documents:[{id:uid(),date:todayISO(),title:file.name,category:"Прочее",url,note:""},...(data.documents||[])]};
+      persist(nd,{what:`Загружен файл: ${file.name}`,section:"documents"});
+    }catch(_){alert("Ошибка загрузки");}
+  };
+  const cats=["Анализы","УЗИ","ЭКГ","Рентген","Выписки","Прочее"];
+  const catColors={"Анализы":"var(--purple)","УЗИ":"var(--teal)","ЭКГ":"var(--rose)","Рентген":"var(--amber)","Выписки":"var(--green)","Прочее":"var(--ink3)"};
+  const docs=[...(data.documents||[])].sort((a,b)=>parseDateMs(b.date)-parseDateMs(a.date));
+
+  return <div className="section">
+    <div className="subtabs">
+      {[["photos","📷 Фото"],["docs","📎 Документы"]].map(([id,label])=>
+        <button key={id} className={`subtab${subtab===id?" active":""}`} onClick={()=>setSubtab(id)}>{label}</button>)}
+    </div>
+
+    {subtab==="photos"&&<>
+      <div style={{background:"var(--purple-s)",border:"1px dashed var(--purple-t)",borderRadius:12,padding:"12px 14px",fontSize:12,color:"var(--ink2)",marginBottom:12}}>
+        Загружайте фото прямо с телефона — они сохраняются в Firebase Storage
+      </div>
+      <div className="add-row">
+        <button className="add-btn" onClick={()=>fileRef.current.click()}>📷 Загрузить фото</button>
+        <input ref={fileRef} type="file" accept="image/*" multiple style={{display:"none"}} onChange={uploadPhoto}/>
+      </div>
+      {progress!==null&&<div className="upload-progress"><div className="upload-progress-fill" style={{width:`${progress}%`}}/><div style={{fontSize:11,color:"var(--purple)",marginTop:4,textAlign:"center"}}>{progress}%</div></div>}
+      {uploadError&&<div style={{background:"var(--red-s)",border:"1px solid var(--rose-t)",borderRadius:10,padding:"8px 12px",marginBottom:8,fontSize:12,color:"var(--red)",fontWeight:600}}>⚠️ {uploadError}</div>}
+      <div className="photo-grid">
+        {(data.photos||[]).map(p=>(
+          <div key={p.id} className="photo-tile">
+            <img src={p.url} alt={p.name}/>
+            <button className="photo-tile-del" onClick={()=>delPhoto(p.id)}>✕</button>
+          </div>
+        ))}
+        {(data.photos||[]).length===0&&<div style={{gridColumn:"1/-1",padding:"24px 0",textAlign:"center",color:"var(--ink3)",fontSize:13}}>Нет фотографий</div>}
+      </div>
+    </>}
+
+    {subtab==="docs"&&<>
+      <div className="add-row" style={{gap:8}}>
+        <button className="add-btn" onClick={()=>setAdding(true)}>+ Ссылка</button>
+        <button className="add-btn" onClick={()=>docFileRef.current.click()}>📤 Файл с телефона</button>
+        <input ref={docFileRef} type="file" style={{display:"none"}} onChange={uploadDocFile}/>
+      </div>
+      {progress!==null&&<div className="upload-progress"><div className="upload-progress-fill" style={{width:`${progress}%`}}/></div>}
+      {adding&&<Sheet title="Добавить документ" onClose={()=>setAdding(false)}>
+        {[["date","Дата"],["title","Название"]].map(([k,l])=>
+          <div key={k} className="inp-group"><label className="inp-label">{l}</label>
+            <input className="inp" value={form[k]} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}/></div>)}
+        <div className="inp-group"><label className="inp-label">Категория</label>
+          <select className="inp" value={form.category} onChange={e=>setForm(p=>({...p,category:e.target.value}))}>
+            {cats.map(c=><option key={c}>{c}</option>)}
+          </select></div>
+        <div className="inp-group"><label className="inp-label">Ссылка (Google Диск и т.д.)</label>
+          <input className="inp" value={form.url} onChange={e=>setForm(p=>({...p,url:e.target.value}))}/></div>
+        <div className="inp-group"><label className="inp-label">Примечание</label>
+          <input className="inp" value={form.note} onChange={e=>setForm(p=>({...p,note:e.target.value}))}/></div>
+        <div className="sheet-btns"><button className="btn btn-primary" onClick={addDoc}>Добавить</button><button className="btn btn-ghost" onClick={()=>setAdding(false)}>Отмена</button></div>
+      </Sheet>}
+      {cats.map(cat=>{
+        const group=docs.filter(d=>d.category===cat);
+        if(!group.length)return null;
+        return <div key={cat} style={{marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:catColors[cat]||"var(--ink3)",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:6}}>{cat}</div>
+          {group.map(d=>(
+            <div key={d.id} className="doc-item">
+              <div className="doc-icon">📄</div>
+              <div className="doc-body">
+                <div className="doc-name">{d.title}</div>
+                <div className="doc-meta">{d.date}{d.note?" · "+d.note:""}</div>
+                {d.url&&<a href={d.url} target="_blank" rel="noopener noreferrer" className="doc-link">🔗 Открыть</a>}
+              </div>
+              <button className="doc-del" onClick={()=>delDoc(d.id)}>✕</button>
+            </div>
+          ))}
+        </div>;
+      })}
+    </>}
+  </div>;
+}
+
+// ── Tab: History ──────────────────────────────────────────────────────────────
+function TabHistory({data,exportJSON,importJSON,persistFromClaude}){
+  const fileRef=useRef();
+  const[showImport,setShowImport]=useState(false);
+  const[importText,setImportText]=useState("");
+  const[importResult,setImportResult]=useState(null);
+  const hist=[...(data.history||[])].sort((a,b)=>b.ts.localeCompare(a.ts));
+  const sectionIcon={profile:"🐾",diagnoses:"📋",visits:"🏥",vaccinations:"💉",prescriptions:"💊",photos:"📷",documents:"📎",exams:"🔬",system:"⚙️"};
+
+  const runImport=()=>{
+    try{
+      const parsed=JSON.parse(importText);
+      // Validate it's a Claude import packet
+      if(!parsed.claudeImport)throw new Error("Неверный формат — нужен пакет из Claude");
+      const result=[];
+
+      // Merge examinations
+      if(parsed.examinations&&parsed.examinations.length>0){
+        const existing=data.examinations||[];
+        const existingIds=new Set(existing.map(e=>e.id));
+        const newExams=parsed.examinations.filter(e=>!existingIds.has(e.id));
+        if(newExams.length>0){
+          result.push(`✅ Добавлено обследований: ${newExams.length}`);
+          data={...data,examinations:[...existing,...newExams]};
+        } else {
+          result.push("ℹ️ Обследования уже есть в карте");
+        }
+      }
+
+      // Merge visits
+      if(parsed.visits&&parsed.visits.length>0){
+        const existing=data.visits||[];
+        const existingIds=new Set(existing.map(v=>v.id));
+        const newV=parsed.visits.filter(v=>!existingIds.has(v.id));
+        if(newV.length>0){
+          result.push(`✅ Добавлено визитов: ${newV.length}`);
+          data={...data,visits:[...existing,...newV]};
+        }
+      }
+
+      // Merge diagnoses
+      if(parsed.diagnoses&&parsed.diagnoses.length>0){
+        const existing=data.diagnoses||[];
+        const existingIds=new Set(existing.map(d=>d.id));
+        const newD=parsed.diagnoses.filter(d=>!existingIds.has(d.id));
+        if(newD.length>0){
+          result.push(`✅ Добавлено диагнозов: ${newD.length}`);
+          data={...data,diagnoses:[...existing,...newD]};
+        }
+      }
+
+      // Merge prescriptions
+      if(parsed.prescriptions&&parsed.prescriptions.length>0){
+        const existing=data.prescriptions||[];
+        const existingIds=new Set(existing.map(p=>p.id));
+        const newP=parsed.prescriptions.filter(p=>!existingIds.has(p.id));
+        if(newP.length>0){
+          result.push(`✅ Добавлено назначений: ${newP.length}`);
+          data={...data,prescriptions:[...existing,...newP]};
+        }
+      }
+
+      // Merge vaccinations
+      if(parsed.vaccinations&&parsed.vaccinations.length>0){
+        const existing=data.vaccinations||[];
+        const existingIds=new Set(existing.map(v=>v.id));
+        const newV=parsed.vaccinations.filter(v=>!existingIds.has(v.id));
+        if(newV.length>0){
+          result.push(`✅ Добавлено обработок/вакцинаций: ${newV.length}`);
+          data={...data,vaccinations:[...existing,...newV]};
+        }
+      }
+
+      if(result.length===0){
+        setImportResult({ok:false,lines:["ℹ️ Нет новых данных для импорта"]});
+        return;
+      }
+      persistFromClaude(data,`Импорт из Claude: ${result.join(", ")}`);
+      setImportResult({ok:true,lines:result});
+      setImportText("");
+    }catch(e){
+      setImportResult({ok:false,lines:["❌ Ошибка: "+e.message]});
+    }
+  };
+
+  return <div className="section">
+
+    {/* Claude Import */}
+    <div style={{background:"#f0f4ff",border:"1.5px solid #c7d2fe",borderRadius:14,padding:"14px",marginBottom:16}}>
+      <div style={{fontWeight:700,fontSize:13,color:"#3730a3",marginBottom:8}}>🤖 Импорт из Claude</div>
+      <div style={{fontSize:12,color:"#4338ca",marginBottom:10,lineHeight:1.6}}>
+        Загрузите фото анализов в Claude → получите JSON-пакет → вставьте сюда. Данные автоматически добавятся в карту.
+      </div>
+      {!showImport
+        ?<button className="backup-btn" style={{background:"#4f46e5",color:"#fff",border:"none"}} onClick={()=>setShowImport(true)}>
+          📋 Вставить данные от Claude
+        </button>
+        :<div>
+          <textarea className="inp" style={{minHeight:120,fontSize:12,fontFamily:"JetBrains Mono,monospace"}}
+            value={importText} onChange={e=>setImportText(e.target.value)}
+            placeholder={'{\n  "claudeImport": true,\n  "examinations": [...],\n  ...\n}'}/>
+          <div style={{display:"flex",gap:8,marginTop:8}}>
+            <button className="btn btn-primary" style={{fontSize:13}} onClick={runImport}>Импортировать</button>
+            <button className="btn btn-ghost" style={{fontSize:13}} onClick={()=>{setShowImport(false);setImportText("");setImportResult(null);}}>Отмена</button>
+          </div>
+          {importResult&&<div style={{marginTop:10,padding:"10px 12px",borderRadius:10,background:importResult.ok?"var(--green-s)":"var(--red-s)",border:`1px solid ${importResult.ok?"#bbf7d0":"#fecaca"}`}}>
+            {importResult.lines.map((l,i)=><div key={i} style={{fontSize:12,color:importResult.ok?"var(--green)":"var(--red)",fontWeight:600}}>{l}</div>)}
+          </div>}
+        </div>}
+    </div>
+
+    {/* Backup */}
+    <div style={{background:"var(--amber-s)",border:"1px solid var(--amber-t)",borderRadius:14,padding:"12px 14px",marginBottom:16}}>
+      <div style={{fontWeight:700,fontSize:13,color:"var(--amber)",marginBottom:8}}>💾 Резервное копирование</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <button className="backup-btn" onClick={exportJSON}>⬇️ Скачать JSON</button>
+        <button className="backup-btn" onClick={()=>fileRef.current.click()}>⬆️ Загрузить JSON</button>
+        <input ref={fileRef} type="file" accept=".json" style={{display:"none"}} onChange={e=>{if(e.target.files[0])importJSON(e.target.files[0]);}}/>
+      </div>
+    </div>
+
+    <div style={{fontFamily:"Fraunces,serif",fontWeight:700,fontSize:16,marginBottom:12,color:"var(--ink)"}}>История изменений</div>
+    {hist.length===0&&<div style={{color:"var(--ink3)",fontSize:13,textAlign:"center",padding:"20px 0"}}>Нет записей</div>}
+    <div className="card" style={{padding:"4px 14px"}}>
+      {hist.map(h=>(
+        <div key={h.id} className="hist-row">
+          <div className="hist-dot" style={{background:h.section==="system"?"var(--ink3)":"var(--purple)"}}/>
+          <div className="hist-body">
+            <div className="hist-what">{sectionIcon[h.section]||"·"} {h.what}</div>
+            <div className="hist-when">{new Date(h.ts).toLocaleString("ru-RU",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>;
+}
+
+// ── Notifications panel ───────────────────────────────────────────────────────
+function NotifPanel({items,onClose}){
+  const overdue=items.filter(i=>i.bucket==="overdue");
+  const today=items.filter(i=>i.bucket==="today");
+  const soon=items.filter(i=>i.bucket==="soon");
+
+  return <div className="notif-overlay" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+    <div className="notif-panel">
+      <div className="notif-head">
+        <div className="notif-head-title">🔔 Напоминания</div>
+        <button onClick={onClose} style={{border:"none",background:"none",fontSize:22,cursor:"pointer",color:"var(--ink3)"}}>×</button>
+      </div>
+      <div className="notif-body">
+        {items.length===0&&<div className="notif-empty">✅ Нет предстоящих процедур</div>}
+        {overdue.length>0&&<div className="notif-section">
+          <div className="notif-section-label" style={{color:"var(--rose)"}}>⚠️ Просрочено</div>
+          {overdue.map(i=><div key={i.id} className="notif-row">
+            <div className="notif-row-icon">{i.icon}</div>
+            <div className="notif-row-text">{i.title}</div>
+            <div className="notif-row-date" style={{color:"var(--rose)"}}>{fmtDate(i.date)}</div>
+          </div>)}
+        </div>}
+        {today.length>0&&<div className="notif-section">
+          <div className="notif-section-label" style={{color:"var(--teal)"}}>📅 Сегодня</div>
+          {today.map(i=><div key={i.id} className="notif-row">
+            <div className="notif-row-icon">{i.icon}</div>
+            <div className="notif-row-text">{i.title}</div>
+            <div className="notif-row-date">Сегодня</div>
+          </div>)}
+        </div>}
+        {soon.length>0&&<div className="notif-section">
+          <div className="notif-section-label" style={{color:"var(--amber)"}}>⏳ Скоро</div>
+          {soon.map(i=><div key={i.id} className="notif-row">
+            <div className="notif-row-icon">{i.icon}</div>
+            <div className="notif-row-text">{i.title}</div>
+            <div className="notif-row-date">{i.days===0?"сегодня":`через ${i.days} дн.`}</div>
+          </div>)}
+        </div>}
+      </div>
+    </div>
+  </div>;
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+const TABS=[
+  {id:"overview", label:"Профиль", icon:"🐾"},
+  {id:"diagnoses",label:"Диагнозы",icon:"📋"},
+  {id:"exams",    label:"Анализы", icon:"🔬"},
+  {id:"visits",   label:"Визиты",  icon:"🏥"},
+  {id:"vaccines", label:"Обработки",icon:"💉"},
+  {id:"meds",     label:"Назначения",icon:"💊"},
+  {id:"docs",     label:"Файлы",   icon:"📎"},
+  {id:"history",  label:"История", icon:"🕐"},
+];
+
+function App(){
+  const{data,loading,persist,saveState,exportJSON,importJSON}=useDB();
+  const[tab,setTab]=useState("overview");
+  const[showNotif,setShowNotif]=useState(false);
+
+  const notifs=useMemo(()=>data?collectNotifications(data):[],[data]);
+  const hasUrgent=notifs.some(n=>n.bucket==="overdue"||n.bucket==="today");
+
+  if(loading)return <div className="loading">
+    <div className="spinner"/>
+    <div className="loading-title">Загружаем карту…</div>
+    <div style={{fontSize:12,color:"var(--ink3)"}}>Подключение к Firebase</div>
+  </div>;
+
+  const di=data.dogInfo||{};
+  const lastBio=[...(data.examinations||[])].filter(e=>e.type==="Биохимия").sort((a,b)=>parseDateMs(b.date)-parseDateMs(a.date))[0];
+
+  return <div className="shell">
+    <Toast state={saveState}/>
+    {showNotif&&<NotifPanel items={notifs} onClose={()=>setShowNotif(false)}/>}
+
+    {/* Header */}
+    <div className="hdr">
+      <div className="hdr-top">
+        <div className="hdr-dog">
+          <div className="hdr-avatar">
+            {di.mainPhotoUrl?<img src={di.mainPhotoUrl} alt=""/>:"🐕"}
+          </div>
+          <div>
+            <div className="hdr-name">{di.name||"Лаки Стар"}</div>
+            <div className="hdr-sub">{di.breed} · {di.age} лет</div>
+            <div className="hdr-save">
+              {saveState==="saving"&&"☁️ сохраняется…"}
+              {saveState==="saved"&&"✓ сохранено"}
+              {saveState==="offline"&&"📴 офлайн"}
+              {saveState==="idle"&&"☁️ Firebase"}
+            </div>
+          </div>
+        </div>
+        <div className="hdr-btns">
+          <button className="icon-btn" onClick={()=>setShowNotif(true)}>
+            🔔{hasUrgent&&<span className="notif-dot"/>}
+          </button>
+        </div>
+      </div>
+      <div className="hdr-stats">
+        {[
+          ["Вес",di.weight||"—"],
+          ["Чип",di.microchip||"—"],
+          ["Посл. анализ",lastBio?lastBio.date:"—"],
+        ].map(([l,v])=><div key={l} className="hdr-stat">
+          <div className="hdr-stat-val">{v}</div>
+          <div className="hdr-stat-lbl">{l}</div>
+        </div>)}
+      </div>
+    </div>
+
+    {/* Alert */}
+    <div className="alert-banner">
+      <div className="alert-banner-icon">🚨</div>
+      <div>
+        <div className="alert-banner-title">Требует действий</div>
+        <div className="alert-banner-body">
+          • УЗИ 12.08.2026: <b>сладж 1,1 см</b> (было 0,35 см) — нужна коррекция лечения<br/>
+          • Печень <b>+10%</b> от нормы и продолжает увеличиваться<br/>
+          • ЭКГ 18.02.2026: возможная гипертрофия ЛЖ — <b>нужна эхокардиография</b>
+        </div>
+      </div>
+    </div>
+
+    {/* Content */}
+    {tab==="overview"&&<TabOverview data={data} persist={persist}/>}
+    {tab==="diagnoses"&&<TabDiagnoses data={data} persist={persist}/>}
+    {tab==="exams"&&<TabExams data={data} persist={persist}/>}
+    {tab==="visits"&&<TabVisits data={data} persist={persist}/>}
+    {tab==="vaccines"&&<TabVaccinations data={data} persist={persist}/>}
+    {tab==="meds"&&<TabPrescriptions data={data} persist={persist}/>}
+    {tab==="docs"&&<TabDocs data={data} persist={persist}/>}
+    {tab==="history"&&<TabHistory data={data} exportJSON={exportJSON} importJSON={importJSON}
+      persistFromClaude={(newData,what)=>persist(newData,{what,section:"system"})}/>}
+
+    {/* Bottom nav */}
+    <div className="bnav">
+      {TABS.map(t=><button key={t.id} className={`bnav-item${tab===t.id?" active":""}`} onClick={()=>setTab(t.id)}>
+        <span className="bnav-icon">{t.icon}</span>{t.label}
+      </button>)}
+    </div>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
